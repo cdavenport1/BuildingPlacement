@@ -5,12 +5,16 @@ namespace NuclearOptionCommander;
 internal sealed class CommanderBuildingPlacementUi
 {
     private const int WindowId = 0x434F4D42;
+    private const int BuildTimeWindowId = 0x434F4D43;
 
     private readonly CommanderBuildingPlacementService service;
     private bool visible;
     private bool helpVisible;
+    private bool buildTimeControlsVisible;
+    private bool buildTimeWindowPositionInitialized;
     private bool positionInitialized;
     private Rect windowRect;
+    private Rect buildTimeWindowRect;
     private Vector2 scroll;
 
     internal CommanderBuildingPlacementUi(CommanderBuildingPlacementService service)
@@ -24,6 +28,7 @@ internal sealed class CommanderBuildingPlacementUi
     {
         visible = !visible;
         helpVisible = false;
+        buildTimeControlsVisible = false;
         EnsurePosition();
     }
 
@@ -31,6 +36,7 @@ internal sealed class CommanderBuildingPlacementUi
     {
         visible = false;
         helpVisible = false;
+        buildTimeControlsVisible = false;
         if (service.AwaitingPlacementSelection)
         {
             service.CancelPlacementSelection();
@@ -52,6 +58,18 @@ internal sealed class CommanderBuildingPlacementUi
             DrawWindow,
             "BUILDING PLACEMENT",
             CommanderUiTheme.Window);
+
+        if (buildTimeControlsVisible)
+        {
+            EnsureBuildTimeWindowPosition();
+            buildTimeWindowRect = CommanderUiTheme.ClampWindow(buildTimeWindowRect);
+            buildTimeWindowRect = GUI.Window(
+                BuildTimeWindowId,
+                buildTimeWindowRect,
+                DrawBuildTimeWindow,
+                "BUILD TIME SETTINGS",
+                CommanderUiTheme.Window);
+        }
     }
 
     internal bool ContainsScreenPoint(Vector2 screenPosition)
@@ -65,7 +83,7 @@ internal sealed class CommanderBuildingPlacementUi
         EnsurePosition();
     }
 
-    private void DrawWindow(int windowId)
+    private void DrawWindow(int _)
     {
         if (CommanderUiTheme.DrawHelpButton(windowRect.width, ref helpVisible))
         {
@@ -81,6 +99,15 @@ internal sealed class CommanderBuildingPlacementUi
         {
             Hide();
             return;
+        }
+
+        if (GUI.Button(new Rect(windowRect.width - 94f, 3f, 26f, 22f), "⚙", CommanderUiTheme.Button))
+        {
+            buildTimeControlsVisible = !buildTimeControlsVisible;
+            if (buildTimeControlsVisible)
+            {
+                EnsureBuildTimeWindowPosition();
+            }
         }
 
         float y = helpVisible ? 136f : 38f;
@@ -99,9 +126,12 @@ internal sealed class CommanderBuildingPlacementUi
         for (int i = 0; i < service.BuildingDefinitions.Count; i++)
         {
             BuildingDefinition definition = service.BuildingDefinitions[i];
+            bool canAfford = service.CanAffordDefinition(definition);
             GUIStyle style = ReferenceEquals(definition, selected)
                 ? CommanderUiTheme.SelectedButton
                 : CommanderUiTheme.Button;
+            bool previousEnabled = GUI.enabled;
+            GUI.enabled = previousEnabled && canAfford;
             if (GUI.Button(
                 new Rect(4f, 4f + i * 58f, viewRect.width - 8f, 50f),
                 service.GetDefinitionLabel(definition),
@@ -109,6 +139,7 @@ internal sealed class CommanderBuildingPlacementUi
             {
                 service.SelectDefinition(i);
             }
+            GUI.enabled = previousEnabled;
         }
         GUI.EndScrollView();
 
@@ -143,6 +174,45 @@ internal sealed class CommanderBuildingPlacementUi
         GUI.DragWindow(new Rect(0f, 0f, windowRect.width - 72f, 28f));
     }
 
+    private void DrawBuildTimeWindow(int _)
+    {
+        if (GUI.Button(new Rect(buildTimeWindowRect.width - 34f, 3f, 26f, 22f), "X", CommanderUiTheme.DangerButton))
+        {
+            buildTimeControlsVisible = false;
+            return;
+        }
+
+        GUI.Label(
+            new Rect(12f, 34f, buildTimeWindowRect.width - 24f, 22f),
+            service.BuildTimeSettingLabel,
+            CommanderUiTheme.Header);
+
+        Rect previewRect = new(12f, 62f, buildTimeWindowRect.width - 24f, 42f);
+        GUI.Box(previewRect, string.Empty, CommanderUiTheme.Panel);
+        GUI.Label(
+            new Rect(previewRect.x + 10f, previewRect.y + 8f, previewRect.width - 20f, 24f),
+            service.BuildTimePreviewLabel,
+            CommanderUiTheme.MutedLabel);
+        CommanderUiTheme.DrawFrame(previewRect, 1f);
+
+        if (GUI.Button(new Rect(12f, 112f, 46f, 30f), "-", CommanderUiTheme.Button))
+        {
+            service.AdjustBuildTimeMultiplier(increase: false);
+        }
+
+        if (GUI.Button(new Rect(64f, 112f, 46f, 30f), "+", CommanderUiTheme.Button))
+        {
+            service.AdjustBuildTimeMultiplier(increase: true);
+        }
+
+        GUI.Label(
+            new Rect(120f, 112f, buildTimeWindowRect.width - 132f, 30f),
+            "Applies to new queued builds",
+            CommanderUiTheme.MutedLabel);
+
+        GUI.DragWindow(new Rect(0f, 0f, buildTimeWindowRect.width - 38f, 28f));
+    }
+
     private void EnsurePosition()
     {
         if (positionInitialized)
@@ -158,5 +228,22 @@ internal sealed class CommanderBuildingPlacementUi
             width,
             height);
         positionInitialized = true;
+    }
+
+    private void EnsureBuildTimeWindowPosition()
+    {
+        if (buildTimeWindowPositionInitialized)
+        {
+            return;
+        }
+
+        float width = Mathf.Min(320f, CommanderUiScale.Width - 24f);
+        float height = 160f;
+        buildTimeWindowRect = new Rect(
+            Mathf.Clamp(windowRect.x + windowRect.width + 10f, 12f, Mathf.Max(12f, CommanderUiScale.Width - width - 12f)),
+            Mathf.Clamp(windowRect.y + 24f, 12f, Mathf.Max(12f, CommanderUiScale.Height - height - 12f)),
+            width,
+            height);
+        buildTimeWindowPositionInitialized = true;
     }
 }

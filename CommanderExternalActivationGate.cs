@@ -55,55 +55,107 @@ internal sealed class CommanderExternalActivationGate
             return WarnAndReturnFalse($"External commander plugin '{pluginGuid}' is not loaded.");
         }
 
-        Type? targetType = ResolveTargetType(pluginInfo);
-        if (targetType == null)
+        if (!TryEvaluateMemberSignal(
+            pluginInfo,
+            CommanderSettings.ExternalCommanderTypeName,
+            CommanderSettings.ExternalCommanderStateMemberName,
+            CommanderSettings.ExternalCommanderInstanceMemberName,
+            CommanderSettings.ExternalCommanderExpectedValue,
+            "commander",
+            out bool active))
         {
-            string configuredTypeName = CommanderSettings.ExternalCommanderTypeName.Trim();
-            return WarnAndReturnFalse(
-                string.IsNullOrWhiteSpace(configuredTypeName)
-                    ? $"Could not resolve an external commander type from plugin '{pluginGuid}'."
-                    : $"Could not find external commander type '{configuredTypeName}'.");
+            return false;
         }
 
         string stateMemberName = CommanderSettings.ExternalCommanderStateMemberName.Trim();
-        if (string.IsNullOrWhiteSpace(stateMemberName))
-        {
-            return WarnAndReturnFalse("External commander linking is enabled, but General/ExternalCommanderStateMemberName is empty.");
-        }
 
-        MemberInfo? stateMember = FindReadableMember(targetType, stateMemberName);
-        if (stateMember == null)
+        string buttonMemberName = CommanderSettings.ExternalCommanderButtonMemberName.Trim();
+        if (!string.IsNullOrWhiteSpace(buttonMemberName))
         {
-            return WarnAndReturnFalse($"Could not find external commander member '{stateMemberName}' on type '{targetType.FullName}'.");
-        }
-
-        object? target = null;
-        if (!IsStatic(stateMember))
-        {
-            target = ResolveTargetInstance(targetType, pluginInfo);
-            if (target == null)
+            if (!TryEvaluateMemberSignal(
+                pluginInfo,
+                CommanderSettings.ExternalCommanderButtonTypeName,
+                CommanderSettings.ExternalCommanderButtonMemberName,
+                CommanderSettings.ExternalCommanderButtonInstanceMemberName,
+                CommanderSettings.ExternalCommanderButtonExpectedValue,
+                "command button",
+                out bool buttonActive))
             {
-                return WarnAndReturnFalse($"Could not resolve an instance of external commander type '{targetType.FullName}'.");
+                return false;
             }
-        }
 
-        if (!TryReadMemberValue(stateMember, target, out object? value, out string? error))
-        {
-            return WarnAndReturnFalse(error ?? $"Could not read external commander member '{stateMemberName}'.");
-        }
-
-        if (!TryInterpretStateValue(value, out bool active, out string? interpretError))
-        {
-            return WarnAndReturnFalse(interpretError ?? $"Could not interpret external commander member '{stateMemberName}'.");
+            active = active && buttonActive;
         }
 
         lastWarning = null;
         return active;
     }
 
-    private static Type? ResolveTargetType(BepInEx.PluginInfo pluginInfo)
+    private bool TryEvaluateMemberSignal(
+        BepInEx.PluginInfo pluginInfo,
+        string configuredTypeName,
+        string configuredMemberName,
+        string configuredInstanceMemberName,
+        string configuredExpectedValue,
+        string signalLabel,
+        out bool active)
     {
-        string configuredTypeName = CommanderSettings.ExternalCommanderTypeName.Trim();
+        active = false;
+
+        Type? targetType = ResolveTargetType(pluginInfo, configuredTypeName);
+        if (targetType == null)
+        {
+            string typeName = configuredTypeName.Trim();
+            WarnAndReturnFalse(
+                string.IsNullOrWhiteSpace(typeName)
+                    ? $"Could not resolve an external {signalLabel} type from plugin '{pluginInfo.Metadata.GUID}'."
+                    : $"Could not find external {signalLabel} type '{typeName}'.");
+            return false;
+        }
+
+        string memberName = configuredMemberName.Trim();
+        if (string.IsNullOrWhiteSpace(memberName))
+        {
+            WarnAndReturnFalse($"External commander linking is enabled, but the configured {signalLabel} member name is empty.");
+            return false;
+        }
+
+        MemberInfo? member = FindReadableMember(targetType, memberName);
+        if (member == null)
+        {
+            WarnAndReturnFalse($"Could not find external {signalLabel} member '{memberName}' on type '{targetType.FullName}'.");
+            return false;
+        }
+
+        object? target = null;
+        if (!IsStatic(member))
+        {
+            target = ResolveTargetInstance(targetType, pluginInfo, configuredInstanceMemberName);
+            if (target == null)
+            {
+                WarnAndReturnFalse($"Could not resolve an instance of external {signalLabel} type '{targetType.FullName}'.");
+                return false;
+            }
+        }
+
+        if (!TryReadMemberValue(member, target, out object? value, out string? error))
+        {
+            WarnAndReturnFalse(error ?? $"Could not read external {signalLabel} member '{memberName}'.");
+            return false;
+        }
+
+        if (!TryInterpretStateValue(value, configuredExpectedValue, out active, out string? interpretError))
+        {
+            WarnAndReturnFalse(interpretError ?? $"Could not interpret external {signalLabel} member '{memberName}'.");
+            return false;
+        }
+
+        return true;
+    }
+
+    private static Type? ResolveTargetType(BepInEx.PluginInfo pluginInfo, string configuredTypeName)
+    {
+        configuredTypeName = configuredTypeName.Trim();
         if (!string.IsNullOrWhiteSpace(configuredTypeName))
         {
             return AccessTools.TypeByName(configuredTypeName);
@@ -112,14 +164,14 @@ internal sealed class CommanderExternalActivationGate
         return pluginInfo.Instance?.GetType();
     }
 
-    private static object? ResolveTargetInstance(Type targetType, BepInEx.PluginInfo pluginInfo)
+    private static object? ResolveTargetInstance(Type targetType, BepInEx.PluginInfo pluginInfo, string configuredInstanceMemberName)
     {
         if (pluginInfo.Instance != null && targetType.IsInstanceOfType(pluginInfo.Instance))
         {
             return pluginInfo.Instance;
         }
 
-        string configuredInstanceMember = CommanderSettings.ExternalCommanderInstanceMemberName.Trim();
+        string configuredInstanceMember = configuredInstanceMemberName.Trim();
         string[] candidateNames = string.IsNullOrWhiteSpace(configuredInstanceMember)
             ? new[] { "Instance", "instance", "Current", "CurrentInstance" }
             : new[] { configuredInstanceMember };
@@ -154,8 +206,8 @@ internal sealed class CommanderExternalActivationGate
     private static MemberInfo? FindReadableMember(Type targetType, string memberName)
     {
         return (MemberInfo?)AccessTools.Property(targetType, memberName)
-            ?? AccessTools.Field(targetType, memberName)
-            ?? AccessTools.Method(targetType, memberName, Type.EmptyTypes);
+            ?? (MemberInfo?)AccessTools.Field(targetType, memberName)
+            ?? (MemberInfo?)AccessTools.Method(targetType, memberName, Type.EmptyTypes);
     }
 
     private static bool TryReadMemberValue(MemberInfo member, object? target, out object? value, out string? error)
@@ -192,7 +244,12 @@ internal sealed class CommanderExternalActivationGate
 
     private static bool TryInterpretStateValue(object? value, out bool active, out string? error)
     {
-        string expectedValue = CommanderSettings.ExternalCommanderExpectedValue.Trim();
+        return TryInterpretStateValue(value, CommanderSettings.ExternalCommanderExpectedValue, out active, out error);
+    }
+
+    private static bool TryInterpretStateValue(object? value, string configuredExpectedValue, out bool active, out string? error)
+    {
+        string expectedValue = configuredExpectedValue.Trim();
         if (!string.IsNullOrWhiteSpace(expectedValue))
         {
             string actualValue = value?.ToString() ?? string.Empty;

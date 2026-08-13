@@ -12,6 +12,13 @@ internal static class CommanderShortcutInput
             && AreModifiersPressed(shortcut);
     }
 
+    internal static bool IsHeld(KeyboardShortcut shortcut)
+    {
+        return shortcut.MainKey != KeyCode.None
+            && Input.GetKey(shortcut.MainKey)
+            && AreModifiersPressed(shortcut);
+    }
+
     private static bool AreModifiersPressed(KeyboardShortcut shortcut)
     {
         foreach (KeyCode modifier in shortcut.Modifiers)
