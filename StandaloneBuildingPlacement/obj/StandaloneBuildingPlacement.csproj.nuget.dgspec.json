@@ -1,0 +1,61 @@
+{
+  "format": 1,
+  "restore": {
+    "c:\\Users\\cdave\\OneDrive\\Desktop\\NOCommander-0.1.2.0\\StandaloneBuildingPlacement\\StandaloneBuildingPlacement.csproj": {}
+  },
+  "projects": {
+    "c:\\Users\\cdave\\OneDrive\\Desktop\\NOCommander-0.1.2.0\\StandaloneBuildingPlacement\\StandaloneBuildingPlacement.csproj": {
+      "version": "0.1.2",
+      "restore": {
+        "projectUniqueName": "c:\\Users\\cdave\\OneDrive\\Desktop\\NOCommander-0.1.2.0\\StandaloneBuildingPlacement\\StandaloneBuildingPlacement.csproj",
+        "projectName": "StandaloneBuildingPlacement",
+        "projectPath": "c:\\Users\\cdave\\OneDrive\\Desktop\\NOCommander-0.1.2.0\\StandaloneBuildingPlacement\\StandaloneBuildingPlacement.csproj",
+        "packagesPath": "C:\\Users\\cdave\\.nuget\\packages\\",
+        "outputPath": "c:\\Users\\cdave\\OneDrive\\Desktop\\NOCommander-0.1.2.0\\StandaloneBuildingPlacement\\obj\\",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "C:\\Users\\cdave\\AppData\\Roaming\\NuGet\\NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net472"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net472": {
+            "framework": "net472",
+            "targetAlias": "net472",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        },
+        "SdkAnalysisLevel": "10.0.300"
+      },
+      "frameworks": {
+        "net472": {
+          "framework": "net472",
+          "targetAlias": "net472",
+          "dependencies": {
+            "Microsoft.NETFramework.ReferenceAssemblies": {
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[1.0.3, )",
+              "autoReferenced": true
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.302\\RuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}
