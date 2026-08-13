@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "Pgrm/eF5Zck=",
+  "dgSpecHash": "XG8AxiD4Ik0=",
   "success": true,
-  "projectFilePath": "c:\\Users\\cdave\\OneDrive\\Desktop\\NOCommander-0.1.2.0\\StandaloneBuildingPlacement\\StandaloneBuildingPlacement.csproj",
+  "projectFilePath": "c:\\Users\\cdave\\OneDrive\\Desktop\\BuildingPlacement\\StandaloneBuildingPlacement\\StandaloneBuildingPlacement.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\cdave\\.nuget\\packages\\microsoft.netframework.referenceassemblies\\1.0.3\\microsoft.netframework.referenceassemblies.1.0.3.nupkg.sha512",
     "C:\\Users\\cdave\\.nuget\\packages\\microsoft.netframework.referenceassemblies.net472\\1.0.3\\microsoft.netframework.referenceassemblies.net472.1.0.3.nupkg.sha512"
