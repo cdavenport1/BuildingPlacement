@@ -5,23 +5,36 @@ namespace NuclearOptionCommander;
 
 internal sealed class StandaloneBuildingPlacementController : MonoBehaviour
 {
+    private readonly CommanderExternalActivationGate externalActivationGate = new();
     private CommanderBuildingPlacementService? service;
     private CommanderBuildingPlacementUi? ui;
     private Rect launcherRect;
     private bool launcherInitialized;
+    private bool buildButtonActive = true;
 
     private void Awake()
     {
         CommanderUiScale.ApplyResolutionPreset();
         service = new CommanderBuildingPlacementService();
         ui = new CommanderBuildingPlacementUi(service);
-        service.Activate();
+        buildButtonActive = externalActivationGate.IsActive;
+        if (buildButtonActive)
+        {
+            service.Activate();
+        }
         SceneManager.activeSceneChanged += OnActiveSceneChanged;
     }
 
     private void Update()
     {
         CommanderUiScale.RefreshResolutionPreset();
+        RefreshBuildButtonActivation();
+
+        if (!buildButtonActive)
+        {
+            return;
+        }
+
         service?.TickPersistent();
 
         if (service?.AwaitingPlacementSelection == true)
@@ -33,6 +46,13 @@ internal sealed class StandaloneBuildingPlacementController : MonoBehaviour
 
     private void OnGUI()
     {
+        if (!buildButtonActive)
+        {
+            return;
+        }
+
+        Matrix4x4 previousMatrix = CommanderUiScale.Begin();
+
         CommanderUiTheme.Ensure();
         EnsureLauncherPosition();
 
@@ -57,6 +77,8 @@ internal sealed class StandaloneBuildingPlacementController : MonoBehaviour
         {
             DrawPlacementCursor();
         }
+
+        CommanderUiScale.End(previousMatrix);
     }
 
     private void OnDestroy()
@@ -70,6 +92,25 @@ internal sealed class StandaloneBuildingPlacementController : MonoBehaviour
         service?.ResetSession();
         ui?.Hide();
         ui?.ResetPosition();
+    }
+
+    private void RefreshBuildButtonActivation()
+    {
+        bool nowActive = externalActivationGate.IsActive;
+        if (nowActive == buildButtonActive)
+        {
+            return;
+        }
+
+        buildButtonActive = nowActive;
+        if (buildButtonActive)
+        {
+            service?.Activate();
+            return;
+        }
+
+        ui?.Hide();
+        service?.Deactivate();
     }
 
     private void HandleWorldPlacementClick()

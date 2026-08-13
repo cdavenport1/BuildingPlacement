@@ -5,11 +5,13 @@ namespace NuclearOptionCommander;
 
 internal sealed class BuildingPlacementController : MonoBehaviour
 {
+    private readonly CommanderExternalActivationGate externalActivationGate = new();
     private CommanderBuildingPlacementService? service;
     private CommanderBuildingPlacementUi? ui;
     private Rect launcherRect;
     private bool launcherInitialized;
     private bool gameInProgress;
+    private bool buildButtonActive = true;
 
     private void Awake()
     {
@@ -17,7 +19,8 @@ internal sealed class BuildingPlacementController : MonoBehaviour
         service = new CommanderBuildingPlacementService();
         ui = new CommanderBuildingPlacementUi(service);
         gameInProgress = IsGameInProgress();
-        if (gameInProgress)
+        buildButtonActive = externalActivationGate.IsActive;
+        if (gameInProgress && buildButtonActive)
         {
             service.Activate();
         }
@@ -27,12 +30,13 @@ internal sealed class BuildingPlacementController : MonoBehaviour
     private void Update()
     {
         CommanderUiScale.RefreshResolutionPreset();
+        RefreshBuildButtonActivation();
 
         bool nowInProgress = IsGameInProgress();
         if (nowInProgress != gameInProgress)
         {
             gameInProgress = nowInProgress;
-            if (gameInProgress)
+            if (gameInProgress && buildButtonActive)
             {
                 service?.Activate();
             }
@@ -49,6 +53,11 @@ internal sealed class BuildingPlacementController : MonoBehaviour
             return;
         }
 
+        if (!buildButtonActive)
+        {
+            return;
+        }
+
         service?.TickPersistent();
 
         if (service?.AwaitingPlacementSelection == true)
@@ -60,10 +69,12 @@ internal sealed class BuildingPlacementController : MonoBehaviour
 
     private void OnGUI()
     {
-        if (!gameInProgress)
+        if (!gameInProgress || !buildButtonActive)
         {
             return;
         }
+
+        Matrix4x4 previousMatrix = CommanderUiScale.Begin();
 
         CommanderUiTheme.Ensure();
         EnsureLauncherPosition();
@@ -89,6 +100,8 @@ internal sealed class BuildingPlacementController : MonoBehaviour
         {
             DrawPlacementCursor();
         }
+
+        CommanderUiScale.End(previousMatrix);
     }
 
     private void OnDestroy()
@@ -102,6 +115,29 @@ internal sealed class BuildingPlacementController : MonoBehaviour
         service?.ResetSession();
         ui?.Hide();
         ui?.ResetPosition();
+    }
+
+    private void RefreshBuildButtonActivation()
+    {
+        bool nowActive = externalActivationGate.IsActive;
+        if (nowActive == buildButtonActive)
+        {
+            return;
+        }
+
+        buildButtonActive = nowActive;
+        if (buildButtonActive)
+        {
+            if (gameInProgress)
+            {
+                service?.Activate();
+            }
+
+            return;
+        }
+
+        ui?.Hide();
+        service?.Deactivate();
     }
 
     private void HandleWorldPlacementClick()

@@ -11,6 +11,12 @@ internal static class CommanderSettings
 
     internal static float UiScale { get; set; } = 1.5f;
     internal static bool ModEnabled { get => Get("General", "Enabled", true); set => Set("General", "Enabled", value); }
+    internal static bool LinkToExternalCommanderMode { get => Get("General", "LinkToExternalCommanderMode", false); set => Set("General", "LinkToExternalCommanderMode", value); }
+    internal static string ExternalCommanderPluginGuid { get => Get("General", "ExternalCommanderPluginGuid", string.Empty); set => Set("General", "ExternalCommanderPluginGuid", value); }
+    internal static string ExternalCommanderTypeName { get => Get("General", "ExternalCommanderTypeName", string.Empty); set => Set("General", "ExternalCommanderTypeName", value); }
+    internal static string ExternalCommanderStateMemberName { get => Get("General", "ExternalCommanderStateMemberName", string.Empty); set => Set("General", "ExternalCommanderStateMemberName", value); }
+    internal static string ExternalCommanderInstanceMemberName { get => Get("General", "ExternalCommanderInstanceMemberName", string.Empty); set => Set("General", "ExternalCommanderInstanceMemberName", value); }
+    internal static string ExternalCommanderExpectedValue { get => Get("General", "ExternalCommanderExpectedValue", string.Empty); set => Set("General", "ExternalCommanderExpectedValue", value); }
     internal static KeyboardShortcut PrimaryAction { get => GetShortcut("PrimaryAction", KeyCode.Mouse0, "Place a building or interact with the UI."); set => Set("Keybinds", "PrimaryAction", value); }
     internal static KeyboardShortcut CancelAction { get => GetShortcut("CancelAction", KeyCode.Escape, "Cancel building placement."); set => Set("Keybinds", "CancelAction", value); }
 
@@ -18,6 +24,12 @@ internal static class CommanderSettings
     {
         config = configFile;
         _ = ModEnabled;
+        _ = LinkToExternalCommanderMode;
+        _ = ExternalCommanderPluginGuid;
+        _ = ExternalCommanderTypeName;
+        _ = ExternalCommanderStateMemberName;
+        _ = ExternalCommanderInstanceMemberName;
+        _ = ExternalCommanderExpectedValue;
         _ = PrimaryAction;
         _ = CancelAction;
     }
