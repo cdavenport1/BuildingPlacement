@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "XG8AxiD4Ik0=",
+  "dgSpecHash": "/A2LD42Jc7k=",
   "success": true,
-  "projectFilePath": "c:\\Users\\cdave\\OneDrive\\Desktop\\BuildingPlacement\\StandaloneBuildingPlacement\\StandaloneBuildingPlacement.csproj",
+  "projectFilePath": "C:\\Users\\cdave\\OneDrive\\Desktop\\BuildingPlacement\\StandaloneBuildingPlacement\\StandaloneBuildingPlacement.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\cdave\\.nuget\\packages\\microsoft.netframework.referenceassemblies\\1.0.3\\microsoft.netframework.referenceassemblies.1.0.3.nupkg.sha512",
     "C:\\Users\\cdave\\.nuget\\packages\\microsoft.netframework.referenceassemblies.net472\\1.0.3\\microsoft.netframework.referenceassemblies.net472.1.0.3.nupkg.sha512"

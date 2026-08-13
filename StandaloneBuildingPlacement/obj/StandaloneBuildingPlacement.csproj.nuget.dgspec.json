@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "c:\\Users\\cdave\\OneDrive\\Desktop\\BuildingPlacement\\StandaloneBuildingPlacement\\StandaloneBuildingPlacement.csproj": {}
+    "C:\\Users\\cdave\\OneDrive\\Desktop\\BuildingPlacement\\StandaloneBuildingPlacement\\StandaloneBuildingPlacement.csproj": {}
   },
   "projects": {
-    "c:\\Users\\cdave\\OneDrive\\Desktop\\BuildingPlacement\\StandaloneBuildingPlacement\\StandaloneBuildingPlacement.csproj": {
+    "C:\\Users\\cdave\\OneDrive\\Desktop\\BuildingPlacement\\StandaloneBuildingPlacement\\StandaloneBuildingPlacement.csproj": {
       "version": "0.1.2",
       "restore": {
-        "projectUniqueName": "c:\\Users\\cdave\\OneDrive\\Desktop\\BuildingPlacement\\StandaloneBuildingPlacement\\StandaloneBuildingPlacement.csproj",
+        "projectUniqueName": "C:\\Users\\cdave\\OneDrive\\Desktop\\BuildingPlacement\\StandaloneBuildingPlacement\\StandaloneBuildingPlacement.csproj",
         "projectName": "StandaloneBuildingPlacement",
-        "projectPath": "c:\\Users\\cdave\\OneDrive\\Desktop\\BuildingPlacement\\StandaloneBuildingPlacement\\StandaloneBuildingPlacement.csproj",
+        "projectPath": "C:\\Users\\cdave\\OneDrive\\Desktop\\BuildingPlacement\\StandaloneBuildingPlacement\\StandaloneBuildingPlacement.csproj",
         "packagesPath": "C:\\Users\\cdave\\.nuget\\packages\\",
-        "outputPath": "c:\\Users\\cdave\\OneDrive\\Desktop\\BuildingPlacement\\StandaloneBuildingPlacement\\obj\\",
+        "outputPath": "C:\\Users\\cdave\\OneDrive\\Desktop\\BuildingPlacement\\StandaloneBuildingPlacement\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\cdave\\AppData\\Roaming\\NuGet\\NuGet.Config"
