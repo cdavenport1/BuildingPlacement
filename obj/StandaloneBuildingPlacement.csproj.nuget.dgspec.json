@@ -5,7 +5,7 @@
   },
   "projects": {
     "C:\\Users\\cdave\\OneDrive\\Desktop\\StandaloneBuildingPlacement\\StandaloneBuildingPlacement.csproj": {
-      "version": "0.1.2",
+      "version": "1.0.0",
       "restore": {
         "projectUniqueName": "C:\\Users\\cdave\\OneDrive\\Desktop\\StandaloneBuildingPlacement\\StandaloneBuildingPlacement.csproj",
         "projectName": "StandaloneBuildingPlacement",
@@ -51,6 +51,11 @@
               "target": "Package",
               "version": "[1.0.3, )",
               "autoReferenced": true
+            },
+            "Nerdbank.GitVersioning": {
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[3.*, )"
             }
           },
           "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.302\\RuntimeIdentifierGraph.json"
