@@ -487,11 +487,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "c:\\Users\\cdave\\OneDrive\\Desktop\\StandaloneBuildingPlacement\\BuildingPlacement.csproj",
+      "projectUniqueName": "C:\\Users\\cdave\\OneDrive\\Desktop\\BuildingPlacement\\BuildingPlacement.csproj",
       "projectName": "BuildingPlacement",
-      "projectPath": "c:\\Users\\cdave\\OneDrive\\Desktop\\StandaloneBuildingPlacement\\BuildingPlacement.csproj",
+      "projectPath": "C:\\Users\\cdave\\OneDrive\\Desktop\\BuildingPlacement\\BuildingPlacement.csproj",
       "packagesPath": "C:\\Users\\cdave\\.nuget\\packages\\",
-      "outputPath": "c:\\Users\\cdave\\OneDrive\\Desktop\\StandaloneBuildingPlacement\\obj\\",
+      "outputPath": "C:\\Users\\cdave\\OneDrive\\Desktop\\BuildingPlacement\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "C:\\Users\\cdave\\AppData\\Roaming\\NuGet\\NuGet.Config"
