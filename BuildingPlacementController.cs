@@ -3,25 +3,52 @@ using UnityEngine.SceneManagement;
 
 namespace NuclearOptionCommander;
 
-internal sealed class StandaloneBuildingPlacementController : MonoBehaviour
+internal sealed class BuildingPlacementController : MonoBehaviour
 {
     private CommanderBuildingPlacementService? service;
     private CommanderBuildingPlacementUi? ui;
     private Rect launcherRect;
     private bool launcherInitialized;
+    private bool gameInProgress;
 
     private void Awake()
     {
         CommanderUiScale.ApplyResolutionPreset();
         service = new CommanderBuildingPlacementService();
         ui = new CommanderBuildingPlacementUi(service);
-        service.Activate();
+        gameInProgress = IsGameInProgress();
+        if (gameInProgress)
+        {
+            service.Activate();
+        }
         SceneManager.activeSceneChanged += OnActiveSceneChanged;
     }
 
     private void Update()
     {
         CommanderUiScale.RefreshResolutionPreset();
+
+        bool nowInProgress = IsGameInProgress();
+        if (nowInProgress != gameInProgress)
+        {
+            gameInProgress = nowInProgress;
+            if (gameInProgress)
+            {
+                service?.Activate();
+            }
+            else
+            {
+                ui?.Hide();
+                service?.Deactivate();
+                service?.ResetSession();
+            }
+        }
+
+        if (!gameInProgress)
+        {
+            return;
+        }
+
         service?.TickPersistent();
 
         if (service?.AwaitingPlacementSelection == true)
@@ -33,6 +60,11 @@ internal sealed class StandaloneBuildingPlacementController : MonoBehaviour
 
     private void OnGUI()
     {
+        if (!gameInProgress)
+        {
+            return;
+        }
+
         CommanderUiTheme.Ensure();
         EnsureLauncherPosition();
 
@@ -79,7 +111,8 @@ internal sealed class StandaloneBuildingPlacementController : MonoBehaviour
             return;
         }
 
-        if (DynamicMap.mapMaximized)
+        DynamicMap? dynamicMap = SceneSingleton<DynamicMap>.i;
+        if (DynamicMap.mapMaximized && dynamicMap != null && dynamicMap.IsCursorInMapRectangle())
         {
             return;
         }
@@ -113,7 +146,14 @@ internal sealed class StandaloneBuildingPlacementController : MonoBehaviour
             return;
         }
 
-        launcherRect = new Rect(10f, 10f, 72f, 36f);
+        float centerY = CommanderUiScale.Height * 0.5f;
+        launcherRect = new Rect(10f, Mathf.Max(10f, centerY - 88f), 72f, 36f);
         launcherInitialized = true;
+    }
+
+    private static bool IsGameInProgress()
+    {
+        return GameManager.gameState == GameState.SinglePlayer
+            || GameManager.gameState == GameState.Multiplayer;
     }
 }

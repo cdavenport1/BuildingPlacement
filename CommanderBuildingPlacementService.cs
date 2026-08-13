@@ -72,15 +72,12 @@ internal sealed class CommanderBuildingPlacementService
 
         if (!DynamicMap.mapMaximized)
         {
-            CancelPlacementSelection(showStatus: true);
             return;
         }
 
         DynamicMap? map = SceneSingleton<DynamicMap>.i;
         if (map == null)
         {
-            CancelPlacementSelection(showStatus: true);
-            SetStatus("Could not open the tactical map.", warning: true);
             return;
         }
 
@@ -129,15 +126,9 @@ internal sealed class CommanderBuildingPlacementService
             return;
         }
 
-        if (!OpenMap())
-        {
-            SetStatus("Could not open the tactical map.", warning: true);
-            return;
-        }
-
         awaitingPlacementSelection = true;
         placementClickTracker.Reset();
-        SetStatus($"Select a location for {definition.unitName}.");
+        SetStatus($"Select a location for {definition.unitName} on the tactical map or in the 3D world.");
     }
 
     internal bool TrySetPlacementFromWorld(Vector2 screenPosition)
@@ -171,23 +162,6 @@ internal sealed class CommanderBuildingPlacementService
         {
             SetStatus("Building placement cancelled.");
         }
-    }
-
-    private static bool OpenMap()
-    {
-        DynamicMap? dynamicMap = SceneSingleton<DynamicMap>.i;
-        if (dynamicMap == null)
-        {
-            return false;
-        }
-
-        DynamicMap.AllowedToOpen = true;
-        if (!DynamicMap.mapMaximized)
-        {
-            dynamicMap.Maximize();
-        }
-
-        return DynamicMap.mapMaximized;
     }
 
     private static void CloseMap()
