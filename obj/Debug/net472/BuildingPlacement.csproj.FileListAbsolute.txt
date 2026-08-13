@@ -1,0 +1,8 @@
+C:\Users\cdave\OneDrive\Desktop\BuildingPlacement\obj\Debug\net472\BuildingPlacement.csproj.AssemblyReference.cache
+C:\Users\cdave\OneDrive\Desktop\BuildingPlacement\bin\Debug\net472\BuildingPlacement.dll
+C:\Users\cdave\OneDrive\Desktop\BuildingPlacement\bin\Debug\net472\BuildingPlacement.pdb
+C:\Users\cdave\OneDrive\Desktop\BuildingPlacement\obj\Debug\net472\BuildingPlacement.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\cdave\OneDrive\Desktop\BuildingPlacement\obj\Debug\net472\BuildingPlacement.csproj.CoreCompileInputs.cache
+C:\Users\cdave\OneDrive\Desktop\BuildingPlacement\obj\Debug\net472\BuildingPlacement.sourcelink.json
+C:\Users\cdave\OneDrive\Desktop\BuildingPlacement\obj\Debug\net472\BuildingPlacement.dll
+C:\Users\cdave\OneDrive\Desktop\BuildingPlacement\obj\Debug\net472\BuildingPlacement.pdb

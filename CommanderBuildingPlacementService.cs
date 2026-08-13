@@ -110,10 +110,15 @@ internal sealed class CommanderBuildingPlacementService
         for (int i = 0; i < pendingPlacements.Count; i++)
         {
             QueuedPlacement queued = pendingPlacements[i];
+            float remainingSeconds = queued.timerStarted
+                ? Mathf.Max(0f, queued.completeAt - Time.unscaledTime)
+                : -1f;
+            float radius = GetJackknifeActivationRadius(queued.definition);
             statuses[i] = new PendingPlacementStatus(
                 queued.definition.unitName,
                 queued.target,
-                Mathf.Max(0f, queued.completeAt - Time.unscaledTime));
+                remainingSeconds,
+                radius);
         }
 
         return statuses;
@@ -357,11 +362,12 @@ internal sealed class CommanderBuildingPlacementService
         Quaternion rotation = Quaternion.Euler(0f, normalizedYaw, 0f);
 
         hq.AddFunds(-cost);
+        float jackknifeRadius = GetJackknifeActivationRadius(definition);
         pendingPlacements.Add(new QueuedPlacement(
             definition,
             target,
             cost,
-            Time.unscaledTime + buildDelaySeconds,
+            buildDelaySeconds,
             $"NOC_BUILD_{definition.unitName}_{Time.frameCount}",
             rotation));
 
@@ -370,7 +376,7 @@ internal sealed class CommanderBuildingPlacementService
         pendingPlacementTarget = default;
         pendingYawDegrees = 0f;
         placementClickTracker.Reset();
-        SetStatus($"{definition.unitName} queued ({FormatCostMillions(cost)}). Build time {buildDelayMinutes:0}m. Heading {Mathf.RoundToInt(normalizedYaw):000}.");
+        SetStatus($"{definition.unitName} queued ({FormatCostMillions(cost)}). Waiting for Jackknife within {jackknifeRadius:0}m. Heading {Mathf.RoundToInt(normalizedYaw):000}.");
     }
 
     private void ProcessPendingPlacements()
@@ -382,15 +388,132 @@ internal sealed class CommanderBuildingPlacementService
 
         for (int i = pendingPlacements.Count - 1; i >= 0; i--)
         {
-            if (Time.unscaledTime < pendingPlacements[i].completeAt)
+            QueuedPlacement queued = pendingPlacements[i];
+            if (!queued.timerStarted)
+            {
+                if (!TryStartQueuedPlacementTimer(queued))
+                {
+                    continue;
+                }
+
+                pendingPlacements[i] = queued;
+            }
+
+            if (Time.unscaledTime < queued.completeAt)
             {
                 continue;
             }
 
-            QueuedPlacement queued = pendingPlacements[i];
             pendingPlacements.RemoveAt(i);
             TryCompleteQueuedPlacement(queued);
         }
+    }
+
+    private bool TryStartQueuedPlacementTimer(QueuedPlacement queued)
+    {
+        if (queued.timerStarted)
+        {
+            return true;
+        }
+
+        Vector3 buildingPosition = queued.target.ToLocalPosition() + queued.definition.spawnOffset;
+        float radius = GetJackknifeActivationRadius(queued.definition);
+        if (!TryFindNearbyJackknife(buildingPosition, radius, out _))
+        {
+            return false;
+        }
+
+        queued.timerStarted = true;
+        queued.startedAt = Time.unscaledTime;
+        queued.completeAt = queued.startedAt + queued.buildDelaySeconds;
+        return true;
+    }
+
+    private static bool TryFindNearbyJackknife(Vector3 buildingPosition, float radius, out Unit? jackknife)
+    {
+        jackknife = null;
+        Unit[] units = UnityEngine.Object.FindObjectsOfType<Unit>();
+        for (int i = 0; i < units.Length; i++)
+        {
+            Unit unit = units[i];
+            if (unit == null || !IsJackknifeUnit(unit))
+            {
+                continue;
+            }
+
+            if (Vector3.Distance(unit.transform.position, buildingPosition) <= radius)
+            {
+                jackknife = unit;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsJackknifeUnit(Unit unit)
+    {
+        Type type = unit.GetType();
+        string normalizedName = new string(type.Name
+            .Where(ch => char.IsLetterOrDigit(ch))
+            .ToArray())
+            .ToLowerInvariant();
+        string normalizedFullName = new string((type.FullName ?? string.Empty)
+            .Where(ch => char.IsLetterOrDigit(ch))
+            .ToArray())
+            .ToLowerInvariant();
+        return normalizedName.Contains("jackknife") || normalizedFullName.Contains("jackknife");
+    }
+
+    private static float GetJackknifeActivationRadius(BuildingDefinition definition)
+    {
+        string typeKey = (definition.unitName ?? string.Empty) + " " + (definition.jsonKey ?? string.Empty);
+        string normalizedKey = typeKey.ToLowerInvariant();
+
+        if (normalizedKey.Contains("hq") || normalizedKey.Contains("headquarters") || normalizedKey.Contains("command") || normalizedKey.Contains("base"))
+        {
+            return 90f;
+        }
+
+        if (normalizedKey.Contains("power") || normalizedKey.Contains("reactor") || normalizedKey.Contains("factory") || normalizedKey.Contains("workshop") || normalizedKey.Contains("shipyard") || normalizedKey.Contains("hangar") || normalizedKey.Contains("fort") || normalizedKey.Contains("outpost") || normalizedKey.Contains("research") || normalizedKey.Contains("lab") || normalizedKey.Contains("barracks") || normalizedKey.Contains("airfield") || normalizedKey.Contains("terminal"))
+        {
+            return 70f;
+        }
+
+        if (normalizedKey.Contains("radar") || normalizedKey.Contains("tower") || normalizedKey.Contains("turret") || normalizedKey.Contains("gun") || normalizedKey.Contains("battery") || normalizedKey.Contains("wall") || normalizedKey.Contains("gate") || normalizedKey.Contains("dome"))
+        {
+            return 45f;
+        }
+
+        if (normalizedKey.Contains("mine") || normalizedKey.Contains("depot") || normalizedKey.Contains("storage") || normalizedKey.Contains("warehouse") || normalizedKey.Contains("refinery") || normalizedKey.Contains("harvester") || normalizedKey.Contains("extractor") || normalizedKey.Contains("dock"))
+        {
+            return 55f;
+        }
+
+        float baseRadius = 25f;
+        if (definition.unitPrefab == null)
+        {
+            return baseRadius;
+        }
+
+        Renderer[] renderers = definition.unitPrefab.GetComponentsInChildren<Renderer>(true);
+        if (renderers.Length == 0)
+        {
+            return baseRadius;
+        }
+
+        float maxExtent = 0f;
+        Transform root = definition.unitPrefab.transform;
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            Bounds bounds = renderers[i].bounds;
+            Vector3 localExtents = root.InverseTransformVector(bounds.extents);
+            maxExtent = Mathf.Max(maxExtent, localExtents.magnitude);
+        }
+
+        float sizeMultiplier = Mathf.Max(0f, (maxExtent - 6f) / 18f);
+        float radiusFromSize = baseRadius + sizeMultiplier * 18f;
+        return Mathf.Clamp(radiusFromSize, baseRadius, 120f);
     }
 
     private void TryCompleteQueuedPlacement(QueuedPlacement queued)
@@ -546,29 +669,35 @@ internal sealed class CommanderBuildingPlacementService
         return yawDegrees < 0f ? yawDegrees + 360f : yawDegrees;
     }
 
-    private readonly struct QueuedPlacement
+    private sealed class QueuedPlacement
     {
         internal readonly BuildingDefinition definition;
         internal readonly GlobalPosition target;
         internal readonly float cost;
-        internal readonly float completeAt;
+        internal readonly float buildDelaySeconds;
         internal readonly string spawnName;
         internal readonly Quaternion rotation;
+        internal bool timerStarted;
+        internal float startedAt;
+        internal float completeAt;
 
         internal QueuedPlacement(
             BuildingDefinition definition,
             GlobalPosition target,
             float cost,
-            float completeAt,
+            float buildDelaySeconds,
             string spawnName,
             Quaternion rotation)
         {
             this.definition = definition;
             this.target = target;
             this.cost = cost;
-            this.completeAt = completeAt;
+            this.buildDelaySeconds = buildDelaySeconds;
             this.spawnName = spawnName;
             this.rotation = rotation;
+            this.startedAt = 0f;
+            this.completeAt = float.PositiveInfinity;
+            this.timerStarted = false;
         }
     }
 
@@ -591,12 +720,14 @@ internal sealed class CommanderBuildingPlacementService
         internal readonly string name;
         internal readonly GlobalPosition target;
         internal readonly float remainingSeconds;
+        internal readonly float jackknifeRadius;
 
-        internal PendingPlacementStatus(string name, GlobalPosition target, float remainingSeconds)
+        internal PendingPlacementStatus(string name, GlobalPosition target, float remainingSeconds, float jackknifeRadius)
         {
             this.name = name;
             this.target = target;
             this.remainingSeconds = remainingSeconds;
+            this.jackknifeRadius = jackknifeRadius;
         }
     }
 

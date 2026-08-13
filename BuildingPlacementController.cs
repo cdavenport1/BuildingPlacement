@@ -6,7 +6,6 @@ namespace NuclearOptionCommander;
 
 internal sealed class BuildingPlacementController : MonoBehaviour
 {
-    private readonly CommanderExternalActivationGate externalActivationGate = new();
     private Texture2D? orientationLineTexture;
     private Material? structurePreviewMaterial;
     private Material? placementBoxMaterial;
@@ -17,7 +16,6 @@ internal sealed class BuildingPlacementController : MonoBehaviour
     private Rect launcherRect;
     private bool launcherInitialized;
     private bool gameInProgress;
-    private bool buildButtonActive = true;
 
     private void Awake()
     {
@@ -25,8 +23,7 @@ internal sealed class BuildingPlacementController : MonoBehaviour
         service = new CommanderBuildingPlacementService();
         ui = new CommanderBuildingPlacementUi(service);
         gameInProgress = IsGameInProgress();
-        buildButtonActive = externalActivationGate.IsActive;
-        if (gameInProgress && buildButtonActive)
+        if (gameInProgress)
         {
             service.Activate();
         }
@@ -36,14 +33,13 @@ internal sealed class BuildingPlacementController : MonoBehaviour
     private void Update()
     {
         CommanderUiScale.RefreshResolutionPreset();
-        RefreshBuildButtonActivation();
         SyncLauncherVisibility();
 
         bool nowInProgress = IsGameInProgress();
         if (nowInProgress != gameInProgress)
         {
             gameInProgress = nowInProgress;
-            if (gameInProgress && buildButtonActive)
+            if (gameInProgress)
             {
                 service?.Activate();
             }
@@ -56,11 +52,6 @@ internal sealed class BuildingPlacementController : MonoBehaviour
         }
 
         if (!gameInProgress)
-        {
-            return;
-        }
-
-        if (!buildButtonActive)
         {
             return;
         }
@@ -88,17 +79,7 @@ internal sealed class BuildingPlacementController : MonoBehaviour
         {
             EnsureLauncherPosition();
 
-            bool previousEnabled = GUI.enabled;
-            Color previousColor = GUI.color;
-            GUI.enabled = previousEnabled && buildButtonActive;
-            if (!buildButtonActive)
-            {
-                GUI.color = new Color(0.6f, 0.6f, 0.6f, 0.95f);
-            }
-            GUIStyle launcherStyle = buildButtonActive
-                ? CommanderUiTheme.PrimaryButton
-                : CommanderUiTheme.Button;
-            if (GUI.Button(launcherRect, GetLauncherLabel(), launcherStyle))
+            if (GUI.Button(launcherRect, GetLauncherLabel(), CommanderUiTheme.PrimaryButton))
             {
                 if (ui?.Visible == true)
                 {
@@ -109,8 +90,6 @@ internal sealed class BuildingPlacementController : MonoBehaviour
                     ui?.Toggle();
                 }
             }
-            GUI.color = previousColor;
-            GUI.enabled = previousEnabled;
 
             if (ui?.Visible == true)
             {
@@ -178,29 +157,6 @@ internal sealed class BuildingPlacementController : MonoBehaviour
         service?.ResetSession();
         ui?.Hide();
         ui?.ResetPosition();
-    }
-
-    private void RefreshBuildButtonActivation()
-    {
-        bool nowActive = externalActivationGate.IsActive;
-        if (nowActive == buildButtonActive)
-        {
-            return;
-        }
-
-        buildButtonActive = nowActive;
-        if (buildButtonActive)
-        {
-            if (gameInProgress)
-            {
-                service?.Activate();
-            }
-
-            return;
-        }
-
-        ui?.Hide();
-        service?.Deactivate();
     }
 
     private void SyncLauncherVisibility()
@@ -590,9 +546,12 @@ internal sealed class BuildingPlacementController : MonoBehaviour
 
             Vector2 guiPoint = CommanderUiScale.ScreenToGui(new Vector2(screenPoint.x, screenPoint.y));
             string countdown = FormatCountdown(pending[i].remainingSeconds);
-            string text = $"{pending[i].name}\n{countdown}";
-            float width = Mathf.Max(140f, style.CalcSize(new GUIContent(text)).x + 18f);
-            Rect marker = new(guiPoint.x + 12f, guiPoint.y - 52f, width, 48f);
+            string text = pending[i].remainingSeconds < 0f
+                ? $"{pending[i].name}\nWAITING\nJackknife < {pending[i].jackknifeRadius:0}m"
+                : $"{pending[i].name}\n{countdown}";
+            float width = Mathf.Max(170f, style.CalcSize(new GUIContent(text)).x + 18f);
+            float height = pending[i].remainingSeconds < 0f ? 60f : 48f;
+            Rect marker = new(guiPoint.x + 12f, guiPoint.y - (pending[i].remainingSeconds < 0f ? 72f : 52f), width, height);
             GUI.Box(marker, text, style);
             CommanderUiTheme.DrawFrame(marker, 1f);
         }
@@ -633,6 +592,6 @@ internal sealed class BuildingPlacementController : MonoBehaviour
 
     private bool ShouldShowLauncher()
     {
-        return buildButtonActive && DynamicMap.mapMaximized;
+        return DynamicMap.mapMaximized;
     }
 }
