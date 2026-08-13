@@ -25,7 +25,7 @@ public sealed class CommanderPlugin : BaseUnityPlugin
 
         harmony = new Harmony(PluginInfo.Guid);
         harmony.PatchAll();
-        gameObject.AddComponent<StandaloneBuildingPlacementController>();
+        gameObject.AddComponent<BuildingPlacementController>();
         Logger.LogInfo($"{PluginInfo.Name} {PluginInfo.Version} loaded");
     }
 

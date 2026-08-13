@@ -4,10 +4,10 @@
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
-    <AssemblyName>StandaloneBuildingPlacement</AssemblyName>
+    <AssemblyName>BuildingPlacement</AssemblyName>
     <RootNamespace>NuclearOptionCommander</RootNamespace>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-    <GeneratedPluginInfoFile>$(IntermediateOutputPath)PluginInfo.Version.g.cs</GeneratedPluginInfoFile>
+    <GeneratedPluginInfoFile>$(BaseIntermediateOutputPath)$(Configuration)\$(TargetFramework)\PluginInfo.Version.g.cs</GeneratedPluginInfoFile>
   </PropertyGroup>
 
   <ItemGroup>
@@ -23,10 +23,19 @@
   </Target>
 
   <Target Name="GeneratePluginVersion" BeforeTargets="BeforeCompile">
+    <ItemGroup>
+      <GeneratedPluginInfoLines Include="namespace NuclearOptionCommander" />
+      <GeneratedPluginInfoLines Include="{" />
+      <GeneratedPluginInfoLines Include="internal static partial class PluginInfo" />
+      <GeneratedPluginInfoLines Include="{" />
+      <GeneratedPluginInfoLines Include="    public const string Version = &quot;$(Version)&quot;%3B" />
+      <GeneratedPluginInfoLines Include="}" />
+      <GeneratedPluginInfoLines Include="}" />
+    </ItemGroup>
     <WriteLinesToFile
       File="$(GeneratedPluginInfoFile)"
       Overwrite="true"
-      Lines="namespace NuclearOptionCommander;&#x0A;&#x0A;internal static partial class PluginInfo&#x0A;{&#x0A;    public const string Version = &quot;$(Version)&quot;;&#x0A;}" />
+      Lines="@(GeneratedPluginInfoLines)" />
     <ItemGroup>
       <Compile Include="$(GeneratedPluginInfoFile)" />
     </ItemGroup>

@@ -5,3 +5,11 @@ C:\Users\cdave\OneDrive\Desktop\NOCommander-0.1.2.0\StandaloneBuildingPlacement\
 C:\Users\cdave\OneDrive\Desktop\NOCommander-0.1.2.0\StandaloneBuildingPlacement\bin\Release\net472\StandaloneBuildingPlacement.pdb
 C:\Users\cdave\OneDrive\Desktop\NOCommander-0.1.2.0\StandaloneBuildingPlacement\obj\Release\net472\StandaloneBuildingPlacement.dll
 C:\Users\cdave\OneDrive\Desktop\NOCommander-0.1.2.0\StandaloneBuildingPlacement\obj\Release\net472\StandaloneBuildingPlacement.pdb
+C:\Users\cdave\OneDrive\Desktop\StandaloneBuildingPlacement\obj\Release\net472\StandaloneBuildingPlacement.csproj.AssemblyReference.cache
+C:\Users\cdave\OneDrive\Desktop\StandaloneBuildingPlacement\obj\Release\net472\StandaloneBuildingPlacement.dll
+C:\Users\cdave\OneDrive\Desktop\StandaloneBuildingPlacement\obj\Release\net472\StandaloneBuildingPlacement.pdb
+C:\Users\cdave\OneDrive\Desktop\StandaloneBuildingPlacement\obj\Release\net472\StandaloneBuildingPlacement.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\cdave\OneDrive\Desktop\StandaloneBuildingPlacement\obj\Release\net472\StandaloneBuildingPlacement.csproj.CoreCompileInputs.cache
+C:\Users\cdave\OneDrive\Desktop\StandaloneBuildingPlacement\obj\Release\net472\StandaloneBuildingPlacement.sourcelink.json
+C:\Users\cdave\OneDrive\Desktop\StandaloneBuildingPlacement\bin\Release\net472\StandaloneBuildingPlacement.dll
+C:\Users\cdave\OneDrive\Desktop\StandaloneBuildingPlacement\bin\Release\net472\StandaloneBuildingPlacement.pdb

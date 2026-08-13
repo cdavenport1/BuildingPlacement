@@ -71,7 +71,7 @@ internal sealed class CommanderBuildingPlacementUi
         {
             CommanderUiTheme.DrawHelpOverlay(
                 new Rect(12f, 34f, windowRect.width - 24f, 92f),
-                "Choose a building blueprint, then place it by clicking a point on the tactical map or in the 3D world. This folder is intentionally standalone and does not wire into the main commander UI.");
+                "Choose a building blueprint, then place it by clicking a point on the tactical map or in the 3D world. This mod does not wire into the main commander UI.");
         }
 
         if (GUI.Button(
