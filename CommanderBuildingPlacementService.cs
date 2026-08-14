@@ -453,49 +453,16 @@ internal sealed class CommanderBuildingPlacementService
 
     private static bool IsJackknifeUnit(Unit unit)
     {
-        if (unit == null)
-        {
-            return false;
-        }
-
-        string[] candidates =
-        {
-            unit.name,
-            unit.gameObject != null ? unit.gameObject.name : string.Empty,
-            unit.GetType().Name,
-            unit.GetType().FullName ?? string.Empty,
-            unit.ToString(),
-        };
-
-        for (int i = 0; i < candidates.Length; i++)
-        {
-            string normalized = NormalizeNameForComparison(candidates[i]);
-            if (normalized.Contains("jackknife")
-                || normalized.Contains("jacknife")
-                || normalized.Contains("dozer"))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static string NormalizeNameForComparison(string value)
-    {
-        if (string.IsNullOrEmpty(value))
-        {
-            return string.Empty;
-        }
-
-        string normalized = new string(value
-            .Where(ch => char.IsLetterOrDigit(ch) || ch == ' ' || ch == '-')
-            .ToArray());
-        normalized = normalized.Replace('-', ' ');
-        normalized = normalized.Replace('_', ' ');
-        normalized = normalized.ToLowerInvariant();
-        normalized = string.Join(" ", normalized.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries));
-        return normalized;
+        Type type = unit.GetType();
+        string normalizedName = new string(type.Name
+            .Where(ch => char.IsLetterOrDigit(ch))
+            .ToArray())
+            .ToLowerInvariant();
+        string normalizedFullName = new string((type.FullName ?? string.Empty)
+            .Where(ch => char.IsLetterOrDigit(ch))
+            .ToArray())
+            .ToLowerInvariant();
+        return normalizedName.Contains("jackknife") || normalizedFullName.Contains("jackknife");
     }
 
     private static float GetJackknifeActivationRadius(BuildingDefinition definition)
