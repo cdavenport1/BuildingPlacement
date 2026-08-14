@@ -210,6 +210,51 @@ internal sealed class CommanderBuildingPlacementUi
             "Applies to new queued builds",
             CommanderUiTheme.MutedLabel);
 
+        GUI.Label(
+            new Rect(12f, 150f, buildTimeWindowRect.width - 24f, 22f),
+            service.OrientationOffsetLabel,
+            CommanderUiTheme.Header);
+
+        if (GUI.Button(new Rect(12f, 176f, 46f, 28f), "-5", CommanderUiTheme.Button))
+        {
+            service.AdjustOrientationOffset(-5f);
+        }
+
+        if (GUI.Button(new Rect(64f, 176f, 46f, 28f), "+5", CommanderUiTheme.Button))
+        {
+            service.AdjustOrientationOffset(5f);
+        }
+
+        if (GUI.Button(new Rect(118f, 176f, 44f, 28f), "0", CommanderUiTheme.Button))
+        {
+            service.SetOrientationOffset(0f);
+        }
+
+        if (GUI.Button(new Rect(166f, 176f, 44f, 28f), "90", CommanderUiTheme.Button))
+        {
+            service.SetOrientationOffset(90f);
+        }
+
+        if (GUI.Button(new Rect(214f, 176f, 44f, 28f), "180", CommanderUiTheme.Button))
+        {
+            service.SetOrientationOffset(180f);
+        }
+
+        if (GUI.Button(new Rect(262f, 176f, 44f, 28f), "270", CommanderUiTheme.Button))
+        {
+            service.SetOrientationOffset(270f);
+        }
+
+        if (GUI.Button(new Rect(12f, 210f, buildTimeWindowRect.width - 24f, 28f), service.OrientationScrollLabel, CommanderUiTheme.Button))
+        {
+            service.ToggleOrientationScrollDirection();
+        }
+
+        if (GUI.Button(new Rect(12f, 242f, buildTimeWindowRect.width - 24f, 28f), "RESET ORIENTATION CALIBRATION", CommanderUiTheme.DangerButton))
+        {
+            service.ResetOrientationCalibration();
+        }
+
         GUI.DragWindow(new Rect(0f, 0f, buildTimeWindowRect.width - 38f, 28f));
     }
 
@@ -238,7 +283,7 @@ internal sealed class CommanderBuildingPlacementUi
         }
 
         float width = Mathf.Min(320f, CommanderUiScale.Width - 24f);
-        float height = 160f;
+        float height = 280f;
         buildTimeWindowRect = new Rect(
             Mathf.Clamp(windowRect.x + windowRect.width + 10f, 12f, Mathf.Max(12f, CommanderUiScale.Width - width - 12f)),
             Mathf.Clamp(windowRect.y + 24f, 12f, Mathf.Max(12f, CommanderUiScale.Height - height - 12f)),

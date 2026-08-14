@@ -1,15 +1,17 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
 
 namespace NuclearOptionCommander;
 
 internal sealed class BuildingPlacementController : MonoBehaviour
 {
-    private Texture2D? orientationLineTexture;
     private Material? structurePreviewMaterial;
     private Material? placementBoxMaterial;
+    private Material? orientationArrowMaterial;
     private Mesh? unitCubeMesh;
+    private Mesh? orientationArrowMesh;
     private readonly Dictionary<int, Bounds> previewBoundsByPrefab = new();
     private CommanderBuildingPlacementService? service;
     private CommanderBuildingPlacementUi? ui;
@@ -122,18 +124,27 @@ internal sealed class BuildingPlacementController : MonoBehaviour
             return;
         }
 
-        DrawStructureOrientationPreview(definition, localPosition, rotation);
+        if (!IsFinite(localPosition))
+        {
+            return;
+        }
+
+        Bounds bounds = new Bounds(Vector3.zero, new Vector3(40f, 20f, 40f));
+        if (definition.unitPrefab != null
+            && TryGetPreviewBounds(definition.unitPrefab, out Bounds computedBounds)
+            && IsValidBounds(computedBounds))
+        {
+            bounds = computedBounds;
+        }
+
+        DrawStructureOrientationPreview(definition, localPosition, rotation, bounds);
+        DrawOrientationArrowPreview(localPosition, rotation, bounds);
     }
 
     private void OnDestroy()
     {
         SceneManager.activeSceneChanged -= OnActiveSceneChanged;
         service?.Deactivate();
-        if (orientationLineTexture != null)
-        {
-            Destroy(orientationLineTexture);
-            orientationLineTexture = null;
-        }
         if (structurePreviewMaterial != null)
         {
             Destroy(structurePreviewMaterial);
@@ -144,10 +155,20 @@ internal sealed class BuildingPlacementController : MonoBehaviour
             Destroy(placementBoxMaterial);
             placementBoxMaterial = null;
         }
+        if (orientationArrowMaterial != null)
+        {
+            Destroy(orientationArrowMaterial);
+            orientationArrowMaterial = null;
+        }
         if (unitCubeMesh != null)
         {
             Destroy(unitCubeMesh);
             unitCubeMesh = null;
+        }
+        if (orientationArrowMesh != null)
+        {
+            Destroy(orientationArrowMesh);
+            orientationArrowMesh = null;
         }
         previewBoundsByPrefab.Clear();
     }
@@ -201,9 +222,7 @@ internal sealed class BuildingPlacementController : MonoBehaviour
         DrawOrientationPreview(
             service,
             out float previewYawDegrees,
-            out bool showingOrientationPreview,
-            out GlobalPosition orientationTarget,
-            out bool hasOrientationTarget);
+            out bool showingOrientationPreview);
 
         Vector2 guiPoint = CommanderUiScale.ScreenToGui(Input.mousePosition);
         string label = service.PreviewLabel;
@@ -227,115 +246,28 @@ internal sealed class BuildingPlacementController : MonoBehaviour
         GUI.Box(hintRect, string.Empty, style);
         GUI.Label(new Rect(hintRect.x + 8f, hintRect.y + 7f, hintRect.width - 16f, hintRect.height - 12f), hint, CommanderUiTheme.Label);
         CommanderUiTheme.DrawFrame(hintRect, 1f);
-
-        Vector2 markerAnchor = guiPoint;
-        if (hasOrientationTarget && TryGetGuiPointForTarget(orientationTarget, out Vector2 targetGuiPoint))
-        {
-            markerAnchor = targetGuiPoint;
-        }
-
-        DrawCursorPlacementBox(markerAnchor, previewYawDegrees, showingOrientationPreview);
     }
 
     private void DrawOrientationPreview(
         CommanderBuildingPlacementService placementService,
         out float yawDegrees,
-        out bool showingOrientationPreview,
-        out GlobalPosition target,
-        out bool hasTarget)
+        out bool showingOrientationPreview)
     {
         yawDegrees = 0f;
         showingOrientationPreview = false;
-        target = default;
-        hasTarget = false;
         if (!placementService.TryGetPlacementOrientationPreview(out CommanderBuildingPlacementService.PlacementOrientationPreview preview)
             || !preview.hasDirection)
         {
             return;
         }
 
-        target = preview.target;
-        hasTarget = true;
         yawDegrees = preview.yawDegrees;
         showingOrientationPreview = true;
     }
 
-    private bool TryGetGuiPointForTarget(GlobalPosition target, out Vector2 guiPoint)
+    private void DrawStructureOrientationPreview(BuildingDefinition definition, Vector3 localPosition, Quaternion rotation, Bounds bounds)
     {
-        guiPoint = default;
-
-        Camera? camera = SceneSingleton<CameraStateManager>.i?.mainCamera;
-        if (camera == null)
-        {
-            return false;
-        }
-
-        Vector3 screenPoint = camera.WorldToScreenPoint(target.ToLocalPosition());
-        if (screenPoint.z <= 0f)
-        {
-            return false;
-        }
-
-        guiPoint = CommanderUiScale.ScreenToGui(new Vector2(screenPoint.x, screenPoint.y));
-        return true;
-    }
-
-    private void DrawCursorPlacementBox(Vector2 guiPoint, float yawDegrees, bool hasOrientation)
-    {
-        float heading = hasOrientation ? yawDegrees : 0f;
-        Rect markerBox = new(guiPoint.x - 15f, guiPoint.y - 15f, 30f, 30f);
-        GUI.Box(markerBox, string.Empty, CommanderUiTheme.Panel);
-        CommanderUiTheme.DrawFrame(markerBox, 2f);
-
-        EnsureOrientationLineTexture();
-        if (orientationLineTexture == null)
-        {
-            return;
-        }
-
-        Vector2 center = new(markerBox.x + markerBox.width * 0.5f, markerBox.y + markerBox.height * 0.5f);
-        float radians = heading * Mathf.Deg2Rad;
-        Vector2 forward = new(Mathf.Sin(radians), -Mathf.Cos(radians));
-        float pointerLength = 10f;
-        DrawGuiLine(center, center + forward * pointerLength, 2f);
-    }
-
-    private void DrawGuiLine(Vector2 a, Vector2 b, float thickness)
-    {
-        Vector2 delta = b - a;
-        float length = delta.magnitude;
-        if (length <= Mathf.Epsilon)
-        {
-            return;
-        }
-
-        float angle = Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg;
-        Matrix4x4 previous = GUI.matrix;
-        GUIUtility.RotateAroundPivot(angle, a);
-        GUI.DrawTexture(new Rect(a.x, a.y - thickness * 0.5f, length, thickness), orientationLineTexture!);
-        GUI.matrix = previous;
-    }
-
-    private void EnsureOrientationLineTexture()
-    {
-        if (orientationLineTexture != null)
-        {
-            return;
-        }
-
-        orientationLineTexture = new Texture2D(1, 1, TextureFormat.RGBA32, mipChain: false)
-        {
-            hideFlags = HideFlags.HideAndDontSave,
-            wrapMode = TextureWrapMode.Clamp,
-            filterMode = FilterMode.Point
-        };
-        orientationLineTexture.SetPixel(0, 0, new Color(0.34f, 0.78f, 0.75f, 0.95f));
-        orientationLineTexture.Apply(updateMipmaps: false, makeNoLongerReadable: true);
-    }
-
-    private void DrawStructureOrientationPreview(BuildingDefinition definition, Vector3 localPosition, Quaternion rotation)
-    {
-        DrawPlacementBoxPreview(definition, localPosition, rotation);
+        DrawPlacementBoxPreview(localPosition, rotation, bounds);
 
         EnsureStructurePreviewMaterial();
         if (structurePreviewMaterial == null || definition.unitPrefab == null)
@@ -357,26 +289,65 @@ internal sealed class BuildingPlacementController : MonoBehaviour
 
             Matrix4x4 localMatrix = rootInverse * filter.transform.localToWorldMatrix;
             Matrix4x4 worldMatrix = worldRoot * localMatrix;
+            if (!IsFinite(worldMatrix))
+            {
+                continue;
+            }
             Graphics.DrawMesh(filter.sharedMesh, worldMatrix, structurePreviewMaterial, 0);
         }
     }
 
-    private void DrawPlacementBoxPreview(BuildingDefinition definition, Vector3 localPosition, Quaternion rotation)
+    private void DrawPlacementBoxPreview(Vector3 localPosition, Quaternion rotation, Bounds bounds)
     {
         EnsurePlacementBoxRenderResources();
-        if (placementBoxMaterial == null || unitCubeMesh == null || definition.unitPrefab == null)
+        if (placementBoxMaterial == null || unitCubeMesh == null)
         {
             return;
         }
 
-        if (!TryGetPreviewBounds(definition.unitPrefab, out Bounds bounds))
+        if (!IsValidBounds(bounds))
         {
             bounds = new Bounds(Vector3.zero, new Vector3(40f, 20f, 40f));
         }
 
         Vector3 worldCenter = localPosition + rotation * bounds.center;
         Matrix4x4 boxMatrix = Matrix4x4.TRS(worldCenter, rotation, bounds.size);
+        if (!IsFinite(boxMatrix))
+        {
+            return;
+        }
         Graphics.DrawMesh(unitCubeMesh, boxMatrix, placementBoxMaterial, 0);
+    }
+
+    private void DrawOrientationArrowPreview(Vector3 localPosition, Quaternion rotation, Bounds bounds)
+    {
+        EnsureOrientationArrowRenderResources();
+        if (orientationArrowMaterial == null || orientationArrowMesh == null)
+        {
+            return;
+        }
+
+        Vector3 extents = bounds.extents;
+        if (!IsFinite(extents))
+        {
+            return;
+        }
+
+        float horizontalExtent = Mathf.Max(3f, Mathf.Max(extents.x, extents.z));
+        float verticalOffset = Mathf.Clamp(extents.y * 0.35f, 1.5f, 10f);
+        float arrowLength = Mathf.Clamp(horizontalExtent * 1.8f, 7f, 32f);
+        float arrowWidth = Mathf.Clamp(horizontalExtent * 0.7f, 2.2f, 12f);
+        float arrowHeight = Mathf.Clamp(horizontalExtent * 0.45f, 1.6f, 8f);
+
+        Vector3 anchor = localPosition + rotation * (bounds.center + Vector3.up * (extents.y + verticalOffset));
+        Vector3 scale = new(arrowWidth, arrowHeight, arrowLength);
+        Matrix4x4 arrowMatrix = Matrix4x4.TRS(anchor, rotation, scale);
+        if (!IsFinite(arrowMatrix))
+        {
+            return;
+        }
+
+        Graphics.DrawMesh(orientationArrowMesh, arrowMatrix, orientationArrowMaterial, 0);
     }
 
     private bool TryGetPreviewBounds(GameObject prefab, out Bounds bounds)
@@ -429,6 +400,12 @@ internal sealed class BuildingPlacementController : MonoBehaviour
         }
 
         localBounds.size = Vector3.Max(localBounds.size, new Vector3(2f, 2f, 2f));
+        if (!IsValidBounds(localBounds))
+        {
+            bounds = default;
+            return false;
+        }
+
         previewBoundsByPrefab[key] = localBounds;
         bounds = localBounds;
         return true;
@@ -441,7 +418,9 @@ internal sealed class BuildingPlacementController : MonoBehaviour
             return;
         }
 
-        Shader? shader = Shader.Find("Legacy Shaders/Transparent/Diffuse") ?? Shader.Find("Standard");
+        Shader? shader = Shader.Find("Legacy Shaders/Transparent/Diffuse")
+            ?? Shader.Find("Unlit/Transparent")
+            ?? Shader.Find("Standard");
         if (shader == null)
         {
             return;
@@ -452,6 +431,7 @@ internal sealed class BuildingPlacementController : MonoBehaviour
             hideFlags = HideFlags.HideAndDontSave,
             color = new Color(0.32f, 0.82f, 0.78f, 0.35f)
         };
+        ConfigureTransparentMaterial(structurePreviewMaterial);
     }
 
     private void EnsurePlacementBoxRenderResources()
@@ -466,7 +446,9 @@ internal sealed class BuildingPlacementController : MonoBehaviour
             return;
         }
 
-        Shader? shader = Shader.Find("Legacy Shaders/Transparent/Diffuse") ?? Shader.Find("Standard");
+        Shader? shader = Shader.Find("Legacy Shaders/Transparent/Diffuse")
+            ?? Shader.Find("Unlit/Transparent")
+            ?? Shader.Find("Standard");
         if (shader == null)
         {
             return;
@@ -475,8 +457,137 @@ internal sealed class BuildingPlacementController : MonoBehaviour
         placementBoxMaterial = new Material(shader)
         {
             hideFlags = HideFlags.HideAndDontSave,
-            color = new Color(0.65f, 0.65f, 0.65f, 0.28f)
+            color = new Color(0.2f, 0.88f, 0.28f, 0.26f)
         };
+        ConfigureTransparentMaterial(placementBoxMaterial);
+    }
+
+    private void EnsureOrientationArrowRenderResources()
+    {
+        if (orientationArrowMesh == null)
+        {
+            orientationArrowMesh = CreateOrientationArrowMesh();
+        }
+
+        if (orientationArrowMaterial != null)
+        {
+            return;
+        }
+
+        Shader? shader = Shader.Find("Legacy Shaders/Transparent/Diffuse")
+            ?? Shader.Find("Unlit/Transparent")
+            ?? Shader.Find("Standard");
+        if (shader == null)
+        {
+            return;
+        }
+
+        orientationArrowMaterial = new Material(shader)
+        {
+            hideFlags = HideFlags.HideAndDontSave,
+            color = new Color(0.2f, 0.95f, 0.35f, 0.9f)
+        };
+        ConfigureTransparentMaterial(orientationArrowMaterial);
+    }
+
+    private static void ConfigureTransparentMaterial(Material material)
+    {
+        if (material.HasProperty("_Mode"))
+        {
+            material.SetFloat("_Mode", 3f);
+        }
+
+        material.SetInt("_SrcBlend", (int)BlendMode.SrcAlpha);
+        material.SetInt("_DstBlend", (int)BlendMode.OneMinusSrcAlpha);
+        material.SetInt("_ZWrite", 0);
+        material.DisableKeyword("_ALPHATEST_ON");
+        material.EnableKeyword("_ALPHABLEND_ON");
+        material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+        material.renderQueue = (int)RenderQueue.Transparent;
+    }
+
+    private static Mesh CreateOrientationArrowMesh()
+    {
+        Mesh mesh = new()
+        {
+            name = "PlacementPreviewOrientationArrow"
+        };
+
+        const float shaftHalfWidth = 0.12f;
+        const float shaftHalfHeight = 0.12f;
+        const float shaftEndZ = 0.62f;
+        const float headHalfWidth = 0.28f;
+        const float headHalfHeight = 0.28f;
+
+        Vector3[] vertices =
+        {
+            new(-shaftHalfWidth, -shaftHalfHeight, 0f),
+            new( shaftHalfWidth, -shaftHalfHeight, 0f),
+            new( shaftHalfWidth,  shaftHalfHeight, 0f),
+            new(-shaftHalfWidth,  shaftHalfHeight, 0f),
+            new(-shaftHalfWidth, -shaftHalfHeight, shaftEndZ),
+            new( shaftHalfWidth, -shaftHalfHeight, shaftEndZ),
+            new( shaftHalfWidth,  shaftHalfHeight, shaftEndZ),
+            new(-shaftHalfWidth,  shaftHalfHeight, shaftEndZ),
+            new(-headHalfWidth, -headHalfHeight, shaftEndZ),
+            new( headHalfWidth, -headHalfHeight, shaftEndZ),
+            new( headHalfWidth,  headHalfHeight, shaftEndZ),
+            new(-headHalfWidth,  headHalfHeight, shaftEndZ),
+            new(0f, 0f, 1f)
+        };
+
+        int[] triangles =
+        {
+            0, 2, 1, 0, 3, 2,
+            1, 2, 6, 1, 6, 5,
+            5, 6, 7, 5, 7, 4,
+            4, 7, 3, 4, 3, 0,
+            3, 7, 6, 3, 6, 2,
+            4, 0, 1, 4, 1, 5,
+            8, 9, 12,
+            9, 10, 12,
+            10, 11, 12,
+            11, 8, 12,
+            8, 11, 10,
+            8, 10, 9
+        };
+
+        mesh.vertices = vertices;
+        mesh.triangles = triangles;
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
+        mesh.hideFlags = HideFlags.HideAndDontSave;
+        return mesh;
+    }
+
+    private static bool IsValidBounds(Bounds bounds)
+    {
+        return IsFinite(bounds.center)
+            && IsFinite(bounds.extents)
+            && bounds.extents.sqrMagnitude > Mathf.Epsilon;
+    }
+
+    private static bool IsFinite(Vector3 value)
+    {
+        return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
+    }
+
+    private static bool IsFinite(Matrix4x4 matrix)
+    {
+        for (int i = 0; i < 16; i++)
+        {
+            if (!IsFinite(matrix[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsFinite(float value)
+    {
+        return !float.IsNaN(value) && !float.IsInfinity(value);
     }
 
     private static Mesh CreateUnitCubeMesh()
@@ -592,6 +703,6 @@ internal sealed class BuildingPlacementController : MonoBehaviour
 
     private bool ShouldShowLauncher()
     {
-        return DynamicMap.mapMaximized;
+        return true;
     }
 }

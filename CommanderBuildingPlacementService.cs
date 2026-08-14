@@ -21,6 +21,7 @@ internal sealed class CommanderBuildingPlacementService
     private const float RefreshIntervalSeconds = 10f;
 
     private readonly CommanderMapClickTracker placementClickTracker = new();
+    private readonly CommanderPlacementCursorState placementCursorState = new();
     private readonly List<BuildingDefinition> buildingDefinitions = new();
     private readonly List<QueuedPlacement> pendingPlacements = new();
     private bool awaitingPlacementSelection;
@@ -62,6 +63,12 @@ internal sealed class CommanderBuildingPlacementService
         }
     }
 
+    internal string OrientationOffsetLabel => $"ORIENTATION OFFSET {Mathf.RoundToInt(NormalizeYawDegrees(CommanderSettings.PlacementOrientationOffsetDegrees)):000}";
+
+    internal string OrientationScrollLabel => CommanderSettings.PlacementReverseScrollDirection
+        ? "SCROLL DIRECTION REVERSED"
+        : "SCROLL DIRECTION NORMAL";
+
     internal bool TryGetPlacementOrientationPreview(out PlacementOrientationPreview preview)
     {
         preview = default;
@@ -70,7 +77,7 @@ internal sealed class CommanderBuildingPlacementService
             return false;
         }
 
-        preview = new PlacementOrientationPreview(pendingPlacementTarget, pendingYawDegrees);
+        preview = new PlacementOrientationPreview(pendingPlacementTarget, GetCalibratedPlacementYawDegrees(pendingYawDegrees));
         return true;
     }
 
@@ -95,7 +102,7 @@ internal sealed class CommanderBuildingPlacementService
 
         definition = selected;
         localPosition = pendingPlacementTarget.ToLocalPosition() + selected.spawnOffset;
-        rotation = Quaternion.Euler(0f, pendingYawDegrees, 0f);
+        rotation = BuildPlacementRotation(pendingYawDegrees);
         return true;
     }
 
@@ -126,12 +133,14 @@ internal sealed class CommanderBuildingPlacementService
 
     internal void Activate()
     {
+        EnsurePlacementCalibrationDefaults();
         RefreshBuildingDefinitions();
         nextRefreshAt = CommanderScheduler.Stagger("building-placement", RefreshIntervalSeconds, 0.4f);
     }
 
     internal void Deactivate()
     {
+        placementCursorState.Deactivate();
         CancelPlacementSelection(showStatus: false);
     }
 
@@ -143,6 +152,7 @@ internal sealed class CommanderBuildingPlacementService
         pendingPlacementTarget = default;
         pendingYawDegrees = 0f;
         placementClickTracker.Reset();
+        placementCursorState.Deactivate();
         buildingDefinitions.Clear();
         selectedIndex = 0;
         nextRefreshAt = 0f;
@@ -156,29 +166,23 @@ internal sealed class CommanderBuildingPlacementService
             return;
         }
 
+        placementCursorState.Tick();
+
         if (CommanderGameInput.CancelDown)
         {
             CancelPlacementSelection(showStatus: true);
             return;
         }
 
-        if (!DynamicMap.mapMaximized)
-        {
-            return;
-        }
-
         DynamicMap? map = SceneSingleton<DynamicMap>.i;
-        if (map == null)
-        {
-            return;
-        }
 
         if (awaitingOrientationConfirmation)
         {
             float scrollDelta = Input.mouseScrollDelta.y;
             if (Mathf.Abs(scrollDelta) > Mathf.Epsilon)
             {
-                pendingYawDegrees = NormalizeYawDegrees(pendingYawDegrees + scrollDelta * OrientationStepDegrees);
+                float signedScrollDelta = CommanderSettings.PlacementReverseScrollDirection ? -scrollDelta : scrollDelta;
+                pendingYawDegrees = NormalizeYawDegrees(pendingYawDegrees + signedScrollDelta * OrientationStepDegrees);
             }
 
             if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
@@ -189,7 +193,7 @@ internal sealed class CommanderBuildingPlacementService
             return;
         }
 
-        if (placementClickTracker.Tick(map, out GlobalPosition target))
+        if (map != null && placementClickTracker.Tick(map, out GlobalPosition target))
         {
             BeginOrientationConfirmation(target);
         }
@@ -228,6 +232,28 @@ internal sealed class CommanderBuildingPlacementService
             MaximumBuildTimeMultiplier);
     }
 
+    internal void AdjustOrientationOffset(float deltaDegrees)
+    {
+        CommanderSettings.PlacementOrientationOffsetDegrees = NormalizeYawDegrees(
+            CommanderSettings.PlacementOrientationOffsetDegrees + deltaDegrees);
+    }
+
+    internal void SetOrientationOffset(float absoluteDegrees)
+    {
+        CommanderSettings.PlacementOrientationOffsetDegrees = NormalizeYawDegrees(absoluteDegrees);
+    }
+
+    internal void ToggleOrientationScrollDirection()
+    {
+        CommanderSettings.PlacementReverseScrollDirection = !CommanderSettings.PlacementReverseScrollDirection;
+    }
+
+    internal void ResetOrientationCalibration()
+    {
+        CommanderSettings.PlacementOrientationOffsetDegrees = 0f;
+        CommanderSettings.PlacementReverseScrollDirection = false;
+    }
+
     internal void SelectDefinition(int index)
     {
         if (index >= 0 && index < buildingDefinitions.Count)
@@ -253,6 +279,7 @@ internal sealed class CommanderBuildingPlacementService
 
         awaitingPlacementSelection = true;
         placementClickTracker.Reset();
+        placementCursorState.Activate();
         SetStatus($"Select a location for {definition.unitName} on the tactical map or in the 3D world.");
     }
 
@@ -285,19 +312,10 @@ internal sealed class CommanderBuildingPlacementService
         pendingPlacementTarget = default;
         pendingYawDegrees = 0f;
         placementClickTracker.Reset();
-        CloseMap();
+        placementCursorState.Deactivate();
         if (showStatus)
         {
             SetStatus("Building placement cancelled.");
-        }
-    }
-
-    private static void CloseMap()
-    {
-        DynamicMap? dynamicMap = SceneSingleton<DynamicMap>.i;
-        if (dynamicMap != null && DynamicMap.mapMaximized)
-        {
-            dynamicMap.Minimize();
         }
     }
 
@@ -352,14 +370,15 @@ internal sealed class CommanderBuildingPlacementService
             pendingPlacementTarget = default;
             pendingYawDegrees = 0f;
             placementClickTracker.Reset();
+            placementCursorState.Deactivate();
             SetStatus($"Insufficient faction funds. {definition.unitName} costs {FormatCostMillions(cost)}.", warning: true);
             return;
         }
 
         float buildDelayMinutes = GetBuildDelayMinutesWithSetting(cost);
         float buildDelaySeconds = buildDelayMinutes * 60f;
-        float normalizedYaw = NormalizeYawDegrees(yawDegrees);
-        Quaternion rotation = Quaternion.Euler(0f, normalizedYaw, 0f);
+        float calibratedYaw = GetCalibratedPlacementYawDegrees(yawDegrees);
+        Quaternion rotation = BuildPlacementRotation(yawDegrees);
 
         hq.AddFunds(-cost);
         float jackknifeRadius = GetJackknifeActivationRadius(definition);
@@ -376,7 +395,31 @@ internal sealed class CommanderBuildingPlacementService
         pendingPlacementTarget = default;
         pendingYawDegrees = 0f;
         placementClickTracker.Reset();
-        SetStatus($"{definition.unitName} queued ({FormatCostMillions(cost)}). Waiting for Jackknife within {jackknifeRadius:0}m. Heading {Mathf.RoundToInt(normalizedYaw):000}.");
+        placementCursorState.Deactivate();
+        SetStatus($"{definition.unitName} queued ({FormatCostMillions(cost)}). Waiting for Jackknife within {jackknifeRadius:0}m. Heading {Mathf.RoundToInt(calibratedYaw):000}.");
+    }
+
+    private static Quaternion BuildPlacementRotation(float yawDegrees)
+    {
+        return Quaternion.Euler(0f, GetCalibratedPlacementYawDegrees(yawDegrees), 0f);
+    }
+
+    private static void EnsurePlacementCalibrationDefaults()
+    {
+        if (CommanderSettings.PlacementCalibrationInitialized)
+        {
+            return;
+        }
+
+        CommanderSettings.PlacementOrientationOffsetDegrees = 0f;
+        CommanderSettings.PlacementReverseScrollDirection = false;
+        CommanderSettings.PlacementCalibrationInitialized = true;
+    }
+
+    private static float GetCalibratedPlacementYawDegrees(float rawYawDegrees)
+    {
+        float offset = CommanderSettings.PlacementOrientationOffsetDegrees;
+        return NormalizeYawDegrees(rawYawDegrees + offset);
     }
 
     private void ProcessPendingPlacements()
@@ -462,7 +505,23 @@ internal sealed class CommanderBuildingPlacementService
             .Where(ch => char.IsLetterOrDigit(ch))
             .ToArray())
             .ToLowerInvariant();
-        return normalizedName.Contains("jackknife") || normalizedFullName.Contains("jackknife");
+        string normalizedObjectName = new string((unit.gameObject.name ?? string.Empty)
+            .Where(ch => char.IsLetterOrDigit(ch))
+            .ToArray())
+            .ToLowerInvariant();
+
+        if (normalizedName.Contains("jackknife")
+            || normalizedFullName.Contains("jackknife")
+            || normalizedObjectName.Contains("jackknife"))
+        {
+            return true;
+        }
+
+        // Some missions/mod setups expose the construction vehicle as UGVDozer1.
+        return normalizedName.Contains("ugvdozer")
+            || normalizedFullName.Contains("ugvdozer")
+            || normalizedObjectName.Contains("ugvdozer")
+            || normalizedObjectName.Contains("dozer1");
     }
 
     private static float GetJackknifeActivationRadius(BuildingDefinition definition)
