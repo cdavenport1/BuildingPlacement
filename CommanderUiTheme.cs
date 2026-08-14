@@ -23,6 +23,7 @@ internal static class CommanderUiTheme
     internal static GUIStyle Label { get; private set; } = null!;
     internal static GUIStyle MutedLabel { get; private set; } = null!;
     internal static GUIStyle Header { get; private set; } = null!;
+    internal static GUIStyle Money { get; private set; } = null!;
     internal static GUIStyle HelpButton { get; private set; } = null!;
 
     internal static void Ensure()
@@ -33,14 +34,14 @@ internal static class CommanderUiTheme
         }
 
         initialized = true;
-        panelTexture = MakeTexture(new Color(0.035f, 0.055f, 0.065f, 0.96f));
-        raisedTexture = MakeTexture(new Color(0.075f, 0.105f, 0.115f, 0.98f));
-        buttonTexture = MakeTexture(new Color(0.11f, 0.15f, 0.16f, 1f));
-        buttonHoverTexture = MakeTexture(new Color(0.16f, 0.23f, 0.24f, 1f));
+        panelTexture = MakeTexture(new Color(0.03f, 0.045f, 0.06f, 0.97f));
+        raisedTexture = MakeTexture(new Color(0.08f, 0.12f, 0.14f, 0.98f));
+        buttonTexture = MakeTexture(new Color(0.12f, 0.17f, 0.18f, 1f));
+        buttonHoverTexture = MakeTexture(new Color(0.18f, 0.25f, 0.27f, 1f));
         buttonActiveTexture = MakeTexture(new Color(0.22f, 0.46f, 0.45f, 1f));
-        accentTexture = MakeTexture(new Color(0.14f, 0.36f, 0.35f, 1f));
-        warningTexture = MakeTexture(new Color(0.48f, 0.17f, 0.13f, 1f));
-        borderTexture = MakeTexture(new Color(0.28f, 0.58f, 0.57f, 0.95f));
+        accentTexture = MakeTexture(new Color(0.14f, 0.38f, 0.37f, 1f));
+        warningTexture = MakeTexture(new Color(0.5f, 0.18f, 0.15f, 1f));
+        borderTexture = MakeTexture(new Color(0.32f, 0.72f, 0.7f, 0.95f));
 
         Label = new GUIStyle(GUI.skin.label)
         {
@@ -56,9 +57,9 @@ internal static class CommanderUiTheme
         };
         Header = new GUIStyle(Label)
         {
-            fontSize = 16,
+            fontSize = 15,
             fontStyle = FontStyle.Bold,
-            normal = { textColor = new Color(0.34f, 0.78f, 0.75f, 1f) },
+            normal = { textColor = new Color(0.46f, 0.96f, 0.92f, 1f) },
             alignment = TextAnchor.MiddleLeft
         };
         Window = new GUIStyle(GUI.skin.window)
@@ -66,7 +67,7 @@ internal static class CommanderUiTheme
             normal = { background = panelTexture, textColor = Color.white },
             onNormal = { background = panelTexture, textColor = Color.white },
             border = new RectOffset(2, 2, 2, 2),
-            padding = new RectOffset(10, 10, 28, 10),
+            padding = new RectOffset(10, 10, 30, 10),
             fontSize = 14,
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.UpperLeft
@@ -84,23 +85,36 @@ internal static class CommanderUiTheme
             active = { background = buttonActiveTexture, textColor = Color.white },
             focused = { background = buttonHoverTexture, textColor = Color.white },
             border = new RectOffset(1, 1, 1, 1),
-            padding = new RectOffset(8, 8, 5, 5),
-            fontSize = 12,
+            padding = new RectOffset(7, 7, 4, 4),
+            fontSize = 11,
             alignment = TextAnchor.MiddleCenter,
             wordWrap = true
         };
         PrimaryButton = new GUIStyle(Button)
         {
             normal = { background = accentTexture, textColor = Color.white },
+            hover = { background = buttonHoverTexture, textColor = Color.white },
+            active = { background = buttonActiveTexture, textColor = Color.white },
             fontStyle = FontStyle.Bold
+        };
+        Money = new GUIStyle(PrimaryButton)
+        {
+            fontSize = 11,
+            fontStyle = FontStyle.Bold,
+            padding = new RectOffset(12, 12, 4, 4),
+            alignment = TextAnchor.MiddleCenter
         };
         DangerButton = new GUIStyle(Button)
         {
-            normal = { background = warningTexture, textColor = Color.white }
+            normal = { background = warningTexture, textColor = Color.white },
+            hover = { background = buttonHoverTexture, textColor = Color.white },
+            active = { background = buttonActiveTexture, textColor = Color.white }
         };
         SelectedButton = new GUIStyle(Button)
         {
             normal = { background = buttonActiveTexture, textColor = Color.white },
+            hover = { background = buttonHoverTexture, textColor = Color.white },
+            active = { background = accentTexture, textColor = Color.white },
             fontStyle = FontStyle.Bold
         };
         HelpButton = new GUIStyle(Button)

@@ -7,6 +7,7 @@ namespace NuclearOptionCommander;
 internal sealed class BuildingPlacementController : MonoBehaviour
 {
     private Texture2D? orientationLineTexture;
+    private Texture2D? orientationArrowTexture;
     private Material? structurePreviewMaterial;
     private Material? placementBoxMaterial;
     private Mesh? unitCubeMesh;
@@ -16,14 +17,16 @@ internal sealed class BuildingPlacementController : MonoBehaviour
     private Rect launcherRect;
     private bool launcherInitialized;
     private bool gameInProgress;
+    private bool advancedUnlockConfirmation;
 
     private void Awake()
     {
         CommanderUiScale.ApplyResolutionPreset();
+        BuildingPlacementFeatureGate.RefreshMission();
         service = new CommanderBuildingPlacementService();
         ui = new CommanderBuildingPlacementUi(service);
         gameInProgress = IsGameInProgress();
-        if (gameInProgress)
+        if (gameInProgress && IsBuildingUnlocked())
         {
             service.Activate();
         }
@@ -39,7 +42,7 @@ internal sealed class BuildingPlacementController : MonoBehaviour
         if (nowInProgress != gameInProgress)
         {
             gameInProgress = nowInProgress;
-            if (gameInProgress)
+            if (gameInProgress && IsBuildingUnlocked())
             {
                 service?.Activate();
             }
@@ -56,6 +59,15 @@ internal sealed class BuildingPlacementController : MonoBehaviour
             return;
         }
 
+        if (!IsBuildingUnlocked())
+        {
+            ui?.Hide();
+            service?.Deactivate();
+            service?.ResetSession();
+            return;
+        }
+
+        EnsureBuildMapState();
         service?.TickPersistent();
 
         if (service?.AwaitingPlacementSelection == true)
@@ -75,20 +87,47 @@ internal sealed class BuildingPlacementController : MonoBehaviour
         Matrix4x4 previousMatrix = CommanderUiScale.Begin();
 
         CommanderUiTheme.Ensure();
+        Rect moneyRect = new Rect((CommanderUiScale.Width - 250f) * 0.5f, 10f, 250f, 36f);
+        GUI.Box(moneyRect, GetFactionFundsLabel(), CommanderUiTheme.Money);
+
         if (ShouldShowLauncher())
         {
             EnsureLauncherPosition();
+            bool buildingUnlocked = IsBuildingUnlocked();
+            GUIStyle launcherStyle = buildingUnlocked ? CommanderUiTheme.PrimaryButton : CommanderUiTheme.Button;
 
-            if (GUI.Button(launcherRect, GetLauncherLabel(), CommanderUiTheme.PrimaryButton))
+            if (GUI.Button(launcherRect, GetLauncherLabel(), launcherStyle))
             {
+                if (!buildingUnlocked)
+                {
+                    if (advancedUnlockConfirmation)
+                    {
+                        BuildingPlacementFeatureGate.UnlockAdvancedFeatures();
+                        advancedUnlockConfirmation = false;
+                        ui?.Show();
+                    }
+                    else
+                    {
+                        advancedUnlockConfirmation = true;
+                    }
+                    CommanderUiScale.End(previousMatrix);
+                    return;
+                }
+
                 if (ui?.Visible == true)
                 {
-                    ui.Hide();
+                    ui?.Hide();
+                    return;
                 }
-                else
-                {
-                    ui?.Toggle();
-                }
+
+                ui?.Show();
+            }
+
+            if (!buildingUnlocked)
+            {
+                DrawBuildLockedIndicator();
+                CommanderUiScale.End(previousMatrix);
+                return;
             }
 
             if (ui?.Visible == true)
@@ -97,6 +136,13 @@ internal sealed class BuildingPlacementController : MonoBehaviour
             }
         }
 
+        if (!IsBuildingUnlocked())
+        {
+            CommanderUiScale.End(previousMatrix);
+            return;
+        }
+
+        EnsureBuildMapState();
         DrawPendingPlacementCountdowns();
 
         if (service?.AwaitingPlacementSelection == true)
@@ -134,6 +180,11 @@ internal sealed class BuildingPlacementController : MonoBehaviour
             Destroy(orientationLineTexture);
             orientationLineTexture = null;
         }
+        if (orientationArrowTexture != null)
+        {
+            Destroy(orientationArrowTexture);
+            orientationArrowTexture = null;
+        }
         if (structurePreviewMaterial != null)
         {
             Destroy(structurePreviewMaterial);
@@ -170,6 +221,28 @@ internal sealed class BuildingPlacementController : MonoBehaviour
         {
             ui.Hide();
         }
+    }
+
+    private void EnsureBuildMapState()
+    {
+        if (ui == null || service == null)
+        {
+            return;
+        }
+
+        bool requireMap = ui.Visible || service.AwaitingPlacementSelection || service.StatusText.Length > 0;
+        if (!requireMap)
+        {
+            return;
+        }
+
+        DynamicMap? dynamicMap = SceneSingleton<DynamicMap>.i;
+        if (dynamicMap == null || DynamicMap.mapMaximized)
+        {
+            return;
+        }
+
+        dynamicMap.Maximize();
     }
 
     private void HandleWorldPlacementClick()
@@ -228,13 +301,11 @@ internal sealed class BuildingPlacementController : MonoBehaviour
         GUI.Label(new Rect(hintRect.x + 8f, hintRect.y + 7f, hintRect.width - 16f, hintRect.height - 12f), hint, CommanderUiTheme.Label);
         CommanderUiTheme.DrawFrame(hintRect, 1f);
 
-        Vector2 markerAnchor = guiPoint;
-        if (hasOrientationTarget && TryGetGuiPointForTarget(orientationTarget, out Vector2 targetGuiPoint))
-        {
-            markerAnchor = targetGuiPoint;
-        }
-
-        DrawCursorPlacementBox(markerAnchor, previewYawDegrees, showingOrientationPreview);
+        float rightEdge = Mathf.Max(marker.xMax, headingRect.xMax, hintRect.xMax);
+        float anchorX = Mathf.Min(rightEdge + 24f, CommanderUiScale.Width - 52f);
+        float anchorY = Mathf.Clamp(guiPoint.y + 62f, 18f, CommanderUiScale.Height - 52f);
+        Vector2 markerAnchor = new(anchorX, anchorY);
+        DrawCursorPlacementBox(markerAnchor, orientationTarget, previewYawDegrees, showingOrientationPreview);
     }
 
     private void DrawOrientationPreview(
@@ -280,24 +351,31 @@ internal sealed class BuildingPlacementController : MonoBehaviour
         return true;
     }
 
-    private void DrawCursorPlacementBox(Vector2 guiPoint, float yawDegrees, bool hasOrientation)
+    private void DrawCursorPlacementBox(Vector2 guiPoint, GlobalPosition target, float yawDegrees, bool hasOrientation)
     {
-        float heading = hasOrientation ? yawDegrees : 0f;
-        Rect markerBox = new(guiPoint.x - 15f, guiPoint.y - 15f, 30f, 30f);
-        GUI.Box(markerBox, string.Empty, CommanderUiTheme.Panel);
-        CommanderUiTheme.DrawFrame(markerBox, 2f);
-
-        EnsureOrientationLineTexture();
-        if (orientationLineTexture == null)
+        if (!hasOrientation)
         {
             return;
         }
 
-        Vector2 center = new(markerBox.x + markerBox.width * 0.5f, markerBox.y + markerBox.height * 0.5f);
-        float radians = heading * Mathf.Deg2Rad;
-        Vector2 forward = new(Mathf.Sin(radians), -Mathf.Cos(radians));
-        float pointerLength = 10f;
-        DrawGuiLine(center, center + forward * pointerLength, 2f);
+        EnsureOrientationArrowTexture();
+        if (orientationArrowTexture == null)
+        {
+            return;
+        }
+
+        // The texture is authored with its forward pointing up and the world yaw is clockwise-positive,
+        // so the sprite needs the opposite sign after compensating for the texture's local 90° offset.
+        float angleDegrees = -(yawDegrees + 90f);
+        angleDegrees = Mathf.Repeat(angleDegrees + 180f, 360f) - 180f;
+
+        Matrix4x4 previous = GUI.matrix;
+        GUI.matrix = Matrix4x4.TRS(
+            guiPoint,
+            Quaternion.Euler(0f, 0f, angleDegrees),
+            Vector3.one) * previous;
+        GUI.DrawTexture(new Rect(-18f, -30f, 36f, 60f), orientationArrowTexture!);
+        GUI.matrix = previous;
     }
 
     private void DrawGuiLine(Vector2 a, Vector2 b, float thickness)
@@ -316,21 +394,94 @@ internal sealed class BuildingPlacementController : MonoBehaviour
         GUI.matrix = previous;
     }
 
-    private void EnsureOrientationLineTexture()
+    private void EnsureOrientationArrowTexture()
     {
-        if (orientationLineTexture != null)
+        if (orientationArrowTexture != null)
         {
             return;
         }
 
-        orientationLineTexture = new Texture2D(1, 1, TextureFormat.RGBA32, mipChain: false)
+        Texture2D texture = new(36, 60, TextureFormat.RGBA32, mipChain: false)
         {
             hideFlags = HideFlags.HideAndDontSave,
             wrapMode = TextureWrapMode.Clamp,
             filterMode = FilterMode.Point
         };
-        orientationLineTexture.SetPixel(0, 0, new Color(0.34f, 0.78f, 0.75f, 0.95f));
-        orientationLineTexture.Apply(updateMipmaps: false, makeNoLongerReadable: true);
+
+        Color green = new(0.24f, 0.9f, 0.38f, 1f);
+        Color black = new(0f, 0f, 0f, 1f);
+        bool[,] fill = new bool[texture.width, texture.height];
+        Vector2 a = new(18f, 6f);
+        Vector2 b = new(6f, 42f);
+        Vector2 c = new(30f, 42f);
+
+        bool IsInsideTriangle(float x, float y, Vector2 v0, Vector2 v1, Vector2 v2)
+        {
+            float area = (v1.x - v0.x) * (v2.y - v0.y) - (v2.x - v0.x) * (v1.y - v0.y);
+            float s = ((v0.x - v2.x) * (y - v2.y) - (v0.y - v2.y) * (x - v2.x)) / area;
+            float t = ((v1.x - v0.x) * (y - v0.y) - (v1.y - v0.y) * (x - v0.x)) / area;
+            float u = 1f - s - t;
+            return s >= 0f && t >= 0f && u >= 0f;
+        }
+
+        for (int y = 0; y < texture.height; y++)
+        {
+            for (int x = 0; x < texture.width; x++)
+            {
+                texture.SetPixel(x, y, Color.clear);
+
+                bool isShaft = x >= 15 && x <= 21 && y >= 42 && y <= 58;
+                if (isShaft)
+                {
+                    fill[x, y] = true;
+                }
+                else if (IsInsideTriangle(x + 0.5f, y + 0.5f, a, b, c))
+                {
+                    fill[x, y] = true;
+                }
+            }
+        }
+
+        for (int y = 0; y < texture.height; y++)
+        {
+            for (int x = 0; x < texture.width; x++)
+            {
+                if (!fill[x, y])
+                {
+                    continue;
+                }
+
+                bool border = false;
+                for (int ox = -1; ox <= 1; ox++)
+                {
+                    for (int oy = -1; oy <= 1; oy++)
+                    {
+                        if (ox == 0 && oy == 0)
+                        {
+                            continue;
+                        }
+
+                        int nx = x + ox;
+                        int ny = y + oy;
+                        if (nx < 0 || nx >= texture.width || ny < 0 || ny >= texture.height || !fill[nx, ny])
+                        {
+                            border = true;
+                            break;
+                        }
+                    }
+
+                    if (border)
+                    {
+                        break;
+                    }
+                }
+
+                texture.SetPixel(x, y, border ? black : green);
+            }
+        }
+
+        texture.Apply(updateMipmaps: false, makeNoLongerReadable: true);
+        orientationArrowTexture = texture;
     }
 
     private void DrawStructureOrientationPreview(BuildingDefinition definition, Vector3 localPosition, Quaternion rotation)
@@ -516,6 +667,21 @@ internal sealed class BuildingPlacementController : MonoBehaviour
         return mesh;
     }
 
+    private void DrawBuildLockedIndicator()
+    {
+        Rect lockRect = new Rect(launcherRect.x + launcherRect.width + 10f, launcherRect.y + 18f, 220f, 64f);
+        GUI.Box(lockRect, string.Empty, CommanderUiTheme.Panel);
+
+        string label = advancedUnlockConfirmation ? "UNLOCK BUILD MODE?" : "BUILD MODE LOCKED";
+        GUI.Label(new Rect(lockRect.x + 10f, lockRect.y + 8f, lockRect.width - 20f, 22f), label, CommanderUiTheme.Header);
+
+        string status = advancedUnlockConfirmation
+            ? "CLICK AGAIN TO CONFIRM"
+            : "MISSION OR MANUAL UNLOCK REQUIRED";
+        GUI.Label(new Rect(lockRect.x + 10f, lockRect.y + 30f, lockRect.width - 20f, 24f), status, CommanderUiTheme.MutedLabel);
+        CommanderUiTheme.DrawFrame(lockRect, 1f);
+    }
+
     private void DrawPendingPlacementCountdowns()
     {
         if (service == null)
@@ -547,7 +713,7 @@ internal sealed class BuildingPlacementController : MonoBehaviour
             Vector2 guiPoint = CommanderUiScale.ScreenToGui(new Vector2(screenPoint.x, screenPoint.y));
             string countdown = FormatCountdown(pending[i].remainingSeconds);
             string text = pending[i].remainingSeconds < 0f
-                ? $"{pending[i].name}\nWAITING\nJackknife < {pending[i].jackknifeRadius:0}m"
+                ? $"Move\n{pending[i].name}\nJackknife within {pending[i].jackknifeRadius:0}m"
                 : $"{pending[i].name}\n{countdown}";
             float width = Mathf.Max(170f, style.CalcSize(new GUIContent(text)).x + 18f);
             float height = pending[i].remainingSeconds < 0f ? 60f : 48f;
@@ -584,6 +750,18 @@ internal sealed class BuildingPlacementController : MonoBehaviour
             : "B\nU\nI\nL\nD";
     }
 
+    private static bool IsBuildingUnlocked()
+    {
+        return BuildingPlacementFeatureGate.AdvancedFeaturesEnabled;
+    }
+
+    private static string GetFactionFundsLabel()
+    {
+        FactionHQ? hq = CommanderGameAccess.GetLocalHq();
+        float funds = hq == null ? 0f : hq.factionFunds;
+        return $"FACTION FUNDS   ${funds:0.##}m";
+    }
+
     private static bool IsGameInProgress()
     {
         return GameManager.gameState == GameState.SinglePlayer
@@ -592,6 +770,6 @@ internal sealed class BuildingPlacementController : MonoBehaviour
 
     private bool ShouldShowLauncher()
     {
-        return DynamicMap.mapMaximized;
+        return gameInProgress && IsBuildingUnlocked();
     }
 }

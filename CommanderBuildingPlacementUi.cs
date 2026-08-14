@@ -24,6 +24,14 @@ internal sealed class CommanderBuildingPlacementUi
 
     internal bool Visible => visible;
 
+    internal void Show()
+    {
+        visible = true;
+        helpVisible = false;
+        buildTimeControlsVisible = false;
+        EnsurePosition();
+    }
+
     internal void Toggle()
     {
         visible = !visible;
@@ -89,7 +97,7 @@ internal sealed class CommanderBuildingPlacementUi
         {
             CommanderUiTheme.DrawHelpOverlay(
                 new Rect(12f, 34f, windowRect.width - 24f, 92f),
-                "Choose a building blueprint, then place it by clicking a point on the tactical map or in the 3D world. This mod does not wire into the main commander UI.");
+                "Choose a building blueprint, then place it by clicking a point on the tactical map or in the 3D world. This build panel behaves like the commander mode overlay.");
         }
 
         if (GUI.Button(
@@ -101,7 +109,13 @@ internal sealed class CommanderBuildingPlacementUi
             return;
         }
 
-        if (GUI.Button(new Rect(windowRect.width - 94f, 3f, 26f, 22f), "⚙", CommanderUiTheme.Button))
+        if (GUI.Button(new Rect(windowRect.width - 120f, 3f, 46f, 22f), "EXIT", CommanderUiTheme.Button))
+        {
+            Hide();
+            return;
+        }
+
+        if (GUI.Button(new Rect(windowRect.width - 70f, 3f, 26f, 22f), "⚙", CommanderUiTheme.Button))
         {
             buildTimeControlsVisible = !buildTimeControlsVisible;
             if (buildTimeControlsVisible)
@@ -127,19 +141,29 @@ internal sealed class CommanderBuildingPlacementUi
         {
             BuildingDefinition definition = service.BuildingDefinitions[i];
             bool canAfford = service.CanAffordDefinition(definition);
-            GUIStyle style = ReferenceEquals(definition, selected)
-                ? CommanderUiTheme.SelectedButton
-                : CommanderUiTheme.Button;
+            bool isSelected = ReferenceEquals(definition, selected);
+            Rect rowRect = new Rect(4f, 4f + i * 58f, viewRect.width - 8f, 50f);
+
+            Color previousColor = GUI.color;
+            GUI.color = isSelected
+                ? new Color(0.16f, 0.36f, 0.38f, 1f)
+                : new Color(0.12f, 0.15f, 0.16f, 1f);
+            GUI.Box(rowRect, string.Empty, CommanderUiTheme.Panel);
+            GUI.color = previousColor;
+
+            GUIStyle rowStyle = isSelected ? CommanderUiTheme.SelectedButton : CommanderUiTheme.Button;
             bool previousEnabled = GUI.enabled;
             GUI.enabled = previousEnabled && canAfford;
-            if (GUI.Button(
-                new Rect(4f, 4f + i * 58f, viewRect.width - 8f, 50f),
-                service.GetDefinitionLabel(definition),
-                style))
+            if (GUI.Button(rowRect, service.GetDefinitionLabel(definition), rowStyle))
             {
                 service.SelectDefinition(i);
             }
             GUI.enabled = previousEnabled;
+
+            if (isSelected)
+            {
+                CommanderUiTheme.DrawFrame(rowRect, 1f);
+            }
         }
         GUI.EndScrollView();
 
