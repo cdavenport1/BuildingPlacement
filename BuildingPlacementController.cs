@@ -128,8 +128,8 @@ internal sealed class BuildingPlacementController : MonoBehaviour
             DrawPlacementCursor();
         }
 
-        // Only render mapService UI when in build mode
-        if (ui?.Visible == true)
+        // Only render mapService UI when in build mode and game map isn't open
+        if (ui?.Visible == true && !DynamicMap.mapMaximized)
         {
             mapService?.DrawControls();
         }
