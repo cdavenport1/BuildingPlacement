@@ -24,6 +24,7 @@ internal static class CommanderSettings
     internal static bool PlacementCalibrationInitialized { get => Get("Placement", "CalibrationInitialized", false); set => Set("Placement", "CalibrationInitialized", value); }
     internal static float PlacementOrientationOffsetDegrees { get => Get("Placement", "OrientationOffsetDegrees", 0f); set => Set("Placement", "OrientationOffsetDegrees", value); }
     internal static bool PlacementReverseScrollDirection { get => Get("Placement", "ReverseScrollDirection", false); set => Set("Placement", "ReverseScrollDirection", value); }
+    internal static bool PlacementShowShips { get => Get("Placement", "ShowShips", true); set => Set("Placement", "ShowShips", value); }
     internal static KeyboardShortcut PrimaryAction { get => GetShortcut("PrimaryAction", KeyCode.Mouse0, "Place a building or interact with the UI."); set => Set("Keybinds", "PrimaryAction", value); }
     internal static KeyboardShortcut CancelAction { get => GetShortcut("CancelAction", KeyCode.Escape, "Cancel building placement."); set => Set("Keybinds", "CancelAction", value); }
 
@@ -44,6 +45,7 @@ internal static class CommanderSettings
         _ = PlacementCalibrationInitialized;
         _ = PlacementOrientationOffsetDegrees;
         _ = PlacementReverseScrollDirection;
+        _ = PlacementShowShips;
         _ = PrimaryAction;
         _ = CancelAction;
     }

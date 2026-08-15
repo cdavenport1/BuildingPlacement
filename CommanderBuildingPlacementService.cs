@@ -13,7 +13,7 @@ internal sealed class CommanderBuildingPlacementService
     private const float BaseMinimumBuildDelayMinutes = 5f;
     private const float BaseMaximumBuildDelayMinutes = 180f;
     private const float FinalMinimumBuildDelayMinutes = 0f;
-    private const float FinalMaximumBuildDelayMinutes = 720f;
+    private const float FinalMaximumBuildDelayMinutes = 15f;
     private const float MinimumBuildTimeMultiplier = 0f;
     private const float MaximumBuildTimeMultiplier = 4f;
     private const float BuildTimeMultiplierStep = 0.25f;
@@ -22,7 +22,7 @@ internal sealed class CommanderBuildingPlacementService
 
     private readonly CommanderMapClickTracker placementClickTracker = new();
     private readonly CommanderPlacementCursorState placementCursorState = new();
-    private readonly List<BuildingDefinition> buildingDefinitions = new();
+    private readonly List<PlaceableDefinition> placeableDefinitions = new();
     private readonly List<QueuedPlacement> pendingPlacements = new();
     private bool awaitingPlacementSelection;
     private bool awaitingOrientationConfirmation;
@@ -32,18 +32,34 @@ internal sealed class CommanderBuildingPlacementService
     private float nextRefreshAt;
     private string statusText = string.Empty;
     private float buildTimeMultiplier = 1f;
+    private BuildingDefinition? ammoDumpDefinition;
+    private Unit? previewAmmoDump;
 
     internal bool AwaitingPlacementSelection => awaitingPlacementSelection;
 
-    internal IReadOnlyList<BuildingDefinition> BuildingDefinitions => buildingDefinitions;
+    internal IReadOnlyList<PlaceableDefinition> PlaceableDefinitions => placeableDefinitions;
 
-    internal BuildingDefinition? SelectedDefinition => buildingDefinitions.Count == 0
+    internal IReadOnlyList<PlaceableDefinition> VisibleDefinitions
+    {
+        get
+        {
+            if (CommanderSettings.PlacementShowShips)
+            {
+                return placeableDefinitions;
+            }
+
+            // Filter out ships
+            return placeableDefinitions.Where(d => !d.IsShip).ToList();
+        }
+    }
+
+    internal PlaceableDefinition? SelectedDefinition => placeableDefinitions.Count == 0
         ? null
-        : buildingDefinitions[Mathf.Clamp(selectedIndex, 0, buildingDefinitions.Count - 1)];
+        : placeableDefinitions[Mathf.Clamp(selectedIndex, 0, placeableDefinitions.Count - 1)];
 
     internal string StatusText => statusText;
 
-    internal string PreviewLabel => SelectedDefinition?.unitName ?? "BUILD";
+    internal string PreviewLabel => SelectedDefinition?.UnitName ?? "BUILD";
 
     internal string BuildTimeSettingLabel => $"BUILD TIME x{buildTimeMultiplier:0.##}";
 
@@ -51,14 +67,14 @@ internal sealed class CommanderBuildingPlacementService
     {
         get
         {
-            BuildingDefinition? definition = SelectedDefinition;
+            PlaceableDefinition? definition = SelectedDefinition;
             if (definition == null)
             {
                 return "No building selected";
             }
 
-            float baseMinutes = GetBuildDelayMinutes(GetDefinitionCost(definition));
-            float adjustedMinutes = GetBuildDelayMinutesWithSetting(GetDefinitionCost(definition));
+            float baseMinutes = GetBuildDelayMinutes(definition.Value);
+            float adjustedMinutes = GetBuildDelayMinutesWithSetting(definition.Value);
             return $"{baseMinutes:0}m -> {adjustedMinutes:0}m";
         }
     }
@@ -82,7 +98,7 @@ internal sealed class CommanderBuildingPlacementService
     }
 
     internal bool TryGetStructureOrientationPreview(
-        out BuildingDefinition definition,
+        out PlaceableDefinition definition,
         out Vector3 localPosition,
         out Quaternion rotation)
     {
@@ -94,14 +110,14 @@ internal sealed class CommanderBuildingPlacementService
             return false;
         }
 
-        BuildingDefinition? selected = SelectedDefinition;
-        if (selected == null || selected.unitPrefab == null)
+        PlaceableDefinition? selected = SelectedDefinition;
+        if (selected == null || selected.UnitPrefab == null)
         {
             return false;
         }
 
         definition = selected;
-        localPosition = pendingPlacementTarget.ToLocalPosition() + selected.spawnOffset;
+        localPosition = pendingPlacementTarget.ToLocalPosition() + selected.SpawnOffset;
         rotation = BuildPlacementRotation(pendingYawDegrees);
         return true;
     }
@@ -122,7 +138,7 @@ internal sealed class CommanderBuildingPlacementService
                 : -1f;
             float radius = GetJackknifeActivationRadius(queued.definition);
             statuses[i] = new PendingPlacementStatus(
-                queued.definition.unitName,
+                queued.definition.UnitName,
                 queued.target,
                 remainingSeconds,
                 radius);
@@ -146,6 +162,7 @@ internal sealed class CommanderBuildingPlacementService
 
     internal void ResetSession()
     {
+        DestroyPreviewAmmoDump();
         RefundPendingPlacements();
         awaitingPlacementSelection = false;
         awaitingOrientationConfirmation = false;
@@ -153,7 +170,7 @@ internal sealed class CommanderBuildingPlacementService
         pendingYawDegrees = 0f;
         placementClickTracker.Reset();
         placementCursorState.Deactivate();
-        buildingDefinitions.Clear();
+        placeableDefinitions.Clear();
         selectedIndex = 0;
         nextRefreshAt = 0f;
         statusText = string.Empty;
@@ -183,6 +200,7 @@ internal sealed class CommanderBuildingPlacementService
             {
                 float signedScrollDelta = CommanderSettings.PlacementReverseScrollDirection ? -scrollDelta : scrollDelta;
                 pendingYawDegrees = NormalizeYawDegrees(pendingYawDegrees + signedScrollDelta * OrientationStepDegrees);
+                UpdatePreviewAmmoDumpRotation();
             }
 
             if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
@@ -211,16 +229,17 @@ internal sealed class CommanderBuildingPlacementService
         RefreshBuildingDefinitions();
     }
 
-    internal string GetDefinitionLabel(BuildingDefinition definition)
+    internal string GetDefinitionLabel(PlaceableDefinition definition)
     {
-        string cost = FormatCostMillions(GetDefinitionCost(definition));
-        return $"{definition.unitName}\n{definition.jsonKey}  |  {cost}";
+        string cost = FormatCostMillions(definition.Value);
+        string type = definition.IsShip ? "Ship" : definition.BuildingDefinition?.jsonKey ?? "Building";
+        return $"{definition.UnitName}\n{type}  |  {cost}";
     }
 
-    internal bool CanAffordDefinition(BuildingDefinition definition)
+    internal bool CanAffordDefinition(PlaceableDefinition definition)
     {
         FactionHQ? hq = CommanderGameAccess.GetLocalHq();
-        return hq == null || hq.factionFunds >= GetDefinitionCost(definition);
+        return hq == null || hq.factionFunds >= definition.Value;
     }
 
     internal void AdjustBuildTimeMultiplier(bool increase)
@@ -256,7 +275,7 @@ internal sealed class CommanderBuildingPlacementService
 
     internal void SelectDefinition(int index)
     {
-        if (index >= 0 && index < buildingDefinitions.Count)
+        if (index >= 0 && index < placeableDefinitions.Count)
         {
             selectedIndex = index;
         }
@@ -264,10 +283,10 @@ internal sealed class CommanderBuildingPlacementService
 
     internal void BeginPlacementSelection()
     {
-        BuildingDefinition? definition = SelectedDefinition;
+        PlaceableDefinition? definition = SelectedDefinition;
         if (definition == null)
         {
-            SetStatus("No building blueprints are available.", warning: true);
+            SetStatus("No building or ship blueprints are available.", warning: true);
             return;
         }
 
@@ -280,7 +299,7 @@ internal sealed class CommanderBuildingPlacementService
         awaitingPlacementSelection = true;
         placementClickTracker.Reset();
         placementCursorState.Activate();
-        SetStatus($"Select a location for {definition.unitName} on the tactical map or in the 3D world.");
+        SetStatus($"Select a location for {definition.UnitName} on the tactical map or in the 3D world.");
     }
 
     internal bool TrySetPlacementFromWorld(Vector2 screenPosition)
@@ -307,6 +326,7 @@ internal sealed class CommanderBuildingPlacementService
             return;
         }
 
+        DestroyPreviewAmmoDump();
         awaitingPlacementSelection = false;
         awaitingOrientationConfirmation = false;
         pendingPlacementTarget = default;
@@ -321,26 +341,55 @@ internal sealed class CommanderBuildingPlacementService
 
     private void RefreshBuildingDefinitions()
     {
-        buildingDefinitions.Clear();
-        BuildingDefinition[] available = Resources.FindObjectsOfTypeAll<BuildingDefinition>()
+        placeableDefinitions.Clear();
+        
+        // Load buildings
+        BuildingDefinition[] buildings = Resources.FindObjectsOfTypeAll<BuildingDefinition>()
             .Where(definition => definition != null && definition.unitPrefab != null)
             .Distinct()
             .OrderBy(definition => definition.unitName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(definition => definition.jsonKey, StringComparer.OrdinalIgnoreCase)
             .ToArray();
-        buildingDefinitions.AddRange(available);
+        
+        foreach (BuildingDefinition building in buildings)
+        {
+            placeableDefinitions.Add(new PlaceableDefinition(building));
+        }
+        
+        // Load ships
+        Encyclopedia? encyclopedia = Encyclopedia.i;
+        if (encyclopedia?.ships != null)
+        {
+            for (int i = 0; i < encyclopedia.ships.Count; i++)
+            {
+                ShipDefinition ship = encyclopedia.ships[i];
+                if (ship != null && ship.unitPrefab != null && ship.unitPrefab.GetComponent<Ship>() != null)
+                {
+                    placeableDefinitions.Add(new PlaceableDefinition(ship));
+                }
+            }
+        }
+        
+        // Sort all by name
+        placeableDefinitions.Sort((left, right) => 
+            string.Compare(left.UnitName, right.UnitName, StringComparison.OrdinalIgnoreCase));
 
-        if (buildingDefinitions.Count == 0)
+        if (placeableDefinitions.Count == 0)
         {
             selectedIndex = 0;
             if (string.IsNullOrWhiteSpace(statusText))
             {
-                statusText = "No building blueprints were found.";
+                statusText = "No building or ship blueprints were found.";
             }
             return;
         }
 
-        selectedIndex = Mathf.Clamp(selectedIndex, 0, buildingDefinitions.Count - 1);
+        // Cache ammo dump definition for preview spawning
+        ammoDumpDefinition = buildings.FirstOrDefault(d => 
+            d.unitName.IndexOf("Ammo", StringComparison.OrdinalIgnoreCase) >= 0 || 
+            d.jsonKey.IndexOf("ammo", StringComparison.OrdinalIgnoreCase) >= 0);
+
+        selectedIndex = Mathf.Clamp(selectedIndex, 0, placeableDefinitions.Count - 1);
     }
 
     private void BeginOrientationConfirmation(GlobalPosition target)
@@ -348,21 +397,23 @@ internal sealed class CommanderBuildingPlacementService
         awaitingOrientationConfirmation = true;
         pendingPlacementTarget = SnapConstructionTargetToTerrain(target);
         pendingYawDegrees = 0f;
+        SpawnPreviewAmmoDump(pendingPlacementTarget, BuildPlacementRotation(pendingYawDegrees));
         SetStatus("Scroll mouse wheel to rotate. Press Enter to confirm placement.");
     }
 
     private void CompletePlacementSelection(GlobalPosition target, float yawDegrees)
     {
-        BuildingDefinition? definition = SelectedDefinition;
+        PlaceableDefinition? definition = SelectedDefinition;
         FactionHQ? hq = CommanderGameAccess.GetLocalHq();
         if (definition == null || hq == null)
         {
+            DestroyPreviewAmmoDump();
             CancelPlacementSelection(showStatus: false);
             SetStatus("The building could not be spawned.", warning: true);
             return;
         }
 
-        float cost = GetDefinitionCost(definition);
+        float cost = definition.Value;
         if (hq.factionFunds < cost)
         {
             awaitingPlacementSelection = false;
@@ -371,7 +422,7 @@ internal sealed class CommanderBuildingPlacementService
             pendingYawDegrees = 0f;
             placementClickTracker.Reset();
             placementCursorState.Deactivate();
-            SetStatus($"Insufficient faction funds. {definition.unitName} costs {FormatCostMillions(cost)}.", warning: true);
+            SetStatus($"Insufficient faction funds. {definition.UnitName} costs {FormatCostMillions(cost)}.", warning: true);
             return;
         }
 
@@ -382,13 +433,19 @@ internal sealed class CommanderBuildingPlacementService
 
         hq.AddFunds(-cost);
         float jackknifeRadius = GetJackknifeActivationRadius(definition);
-        pendingPlacements.Add(new QueuedPlacement(
+        QueuedPlacement placement = new QueuedPlacement(
             definition,
             target,
             cost,
             buildDelaySeconds,
-            $"NOC_BUILD_{definition.unitName}_{Time.frameCount}",
-            rotation));
+            $"NOC_BUILD_{definition.UnitName}_{Time.frameCount}",
+            rotation);
+        
+        // Transfer preview ammo dump ownership to the queued placement
+        placement.previewAmmoDump = previewAmmoDump;
+        previewAmmoDump = null;
+        
+        pendingPlacements.Add(placement);
 
         awaitingPlacementSelection = false;
         awaitingOrientationConfirmation = false;
@@ -396,7 +453,7 @@ internal sealed class CommanderBuildingPlacementService
         pendingYawDegrees = 0f;
         placementClickTracker.Reset();
         placementCursorState.Deactivate();
-        SetStatus($"{definition.unitName} queued ({FormatCostMillions(cost)}). Waiting for Jackknife within {jackknifeRadius:0}m. Heading {Mathf.RoundToInt(calibratedYaw):000}.");
+        SetStatus($"{definition.UnitName} queued ({FormatCostMillions(cost)}). Waiting for Jackknife within {jackknifeRadius:0}m. Heading {Mathf.RoundToInt(calibratedYaw):000}.");
     }
 
     private static Quaternion BuildPlacementRotation(float yawDegrees)
@@ -443,6 +500,13 @@ internal sealed class CommanderBuildingPlacementService
                 pendingPlacements[i] = queued;
             }
 
+            // Remove preview 5 seconds before build completes to avoid spawn conflicts
+            float timeRemaining = queued.completeAt - Time.unscaledTime;
+            if (queued.timerStarted && timeRemaining <= 5f && queued.previewAmmoDump != null)
+            {
+                DestroyQueuedPlacementPreview(queued);
+            }
+
             if (Time.unscaledTime < queued.completeAt)
             {
                 continue;
@@ -460,7 +524,7 @@ internal sealed class CommanderBuildingPlacementService
             return true;
         }
 
-        Vector3 buildingPosition = queued.target.ToLocalPosition() + queued.definition.spawnOffset;
+        Vector3 buildingPosition = queued.target.ToLocalPosition() + queued.definition.SpawnOffset;
         float radius = GetJackknifeActivationRadius(queued.definition);
         if (!TryFindNearbyJackknife(buildingPosition, radius, out _))
         {
@@ -525,9 +589,31 @@ internal sealed class CommanderBuildingPlacementService
             || normalizedObjectName.Contains("dozer1");
     }
 
-    private static float GetJackknifeActivationRadius(BuildingDefinition definition)
+    private static float GetJackknifeActivationRadius(PlaceableDefinition definition)
     {
-        string typeKey = (definition.unitName ?? string.Empty) + " " + (definition.jsonKey ?? string.Empty);
+        // Ships require a minimum 160m Jackknife activation radius with size-based scaling
+        if (definition.IsShip)
+        {
+            ShipDefinition? ship = definition.ShipDefinition;
+            if (ship == null)
+            {
+                return 160f;
+            }
+
+            // Scale up based on ship size dimensions
+            float shipSize = Mathf.Max(ship.width, ship.height, ship.length);
+            float shipSizeMultiplier = Mathf.Max(0f, (shipSize - 20f) / 30f);
+            float shipRadiusFromSize = 160f + shipSizeMultiplier * 90f;
+            return Mathf.Clamp(shipRadiusFromSize, 160f, 340f);
+        }
+
+        BuildingDefinition? building = definition.BuildingDefinition;
+        if (building == null)
+        {
+            return 25f;
+        }
+
+        string typeKey = (building.unitName ?? string.Empty) + " " + (building.jsonKey ?? string.Empty);
         string normalizedKey = typeKey.ToLowerInvariant();
 
         if (normalizedKey.Contains("hq") || normalizedKey.Contains("headquarters") || normalizedKey.Contains("command") || normalizedKey.Contains("base"))
@@ -551,19 +637,19 @@ internal sealed class CommanderBuildingPlacementService
         }
 
         float baseRadius = 25f;
-        if (definition.unitPrefab == null)
+        if (building.unitPrefab == null)
         {
             return baseRadius;
         }
 
-        Renderer[] renderers = definition.unitPrefab.GetComponentsInChildren<Renderer>(true);
+        Renderer[] renderers = building.unitPrefab.GetComponentsInChildren<Renderer>(true);
         if (renderers.Length == 0)
         {
             return baseRadius;
         }
 
         float maxExtent = 0f;
-        Transform root = definition.unitPrefab.transform;
+        Transform root = building.unitPrefab.transform;
         for (int i = 0; i < renderers.Length; i++)
         {
             Bounds bounds = renderers[i].bounds;
@@ -578,28 +664,52 @@ internal sealed class CommanderBuildingPlacementService
 
     private void TryCompleteQueuedPlacement(QueuedPlacement queued)
     {
+        PlaceableDefinition? definition = queued.definition;
         FactionHQ? hq = CommanderGameAccess.GetLocalHq();
         Spawner? spawner = NetworkSceneSingleton<Spawner>.i;
-        if (hq == null || spawner == null)
+        if (definition == null || hq == null || spawner == null)
         {
             RefundQueuedPlacement(queued);
-            SetStatus($"{queued.definition.unitName} build failed because game services are unavailable. Refunded {FormatCostMillions(queued.cost)}.", warning: true);
+            SetStatus($"Build failed because game services are unavailable. Refunded {FormatCostMillions(queued.cost)}.", warning: true);
             return;
         }
 
-        Vector3 localPosition = queued.target.ToLocalPosition() + queued.definition.spawnOffset;
+        Vector3 localPosition = queued.target.ToLocalPosition() + definition.SpawnOffset;
 
         try
         {
-            Unit unit = spawner.SpawnFromUnitDefinitionInEditor(
-                queued.definition,
-                localPosition.ToGlobalPosition(),
-                queued.rotation,
-                hq,
-                queued.spawnName);
+            Unit unit;
+            
+            if (definition.IsShip && definition.ShipDefinition != null)
+            {
+                // Spawn ship immediately
+                unit = spawner.SpawnShip(
+                    definition.ShipDefinition.unitPrefab,
+                    localPosition.ToGlobalPosition(),
+                    queued.rotation,
+                    hq,
+                    null,
+                    1f,
+                    holdPosition: false);
+            }
+            else if (!definition.IsShip && definition.BuildingDefinition != null)
+            {
+                // Spawn building
+                unit = spawner.SpawnFromUnitDefinitionInEditor(
+                    definition.BuildingDefinition,
+                    localPosition.ToGlobalPosition(),
+                    queued.rotation,
+                    hq,
+                    queued.spawnName);
+            }
+            else
+            {
+                throw new InvalidOperationException($"Unknown placeable type: {definition.UnitName}");
+            }
+            
             if (unit == null)
             {
-                throw new InvalidOperationException($"Spawner returned null for {queued.definition.unitName}.");
+                throw new InvalidOperationException($"Spawner returned null for {definition.UnitName}.");
             }
 
             if (unit is GroundVehicle groundVehicle)
@@ -611,13 +721,14 @@ internal sealed class CommanderBuildingPlacementService
                 ship.SetHoldPosition(true);
             }
 
-            SetStatus($"{queued.definition.unitName} completed for {FormatCostMillions(queued.cost)}.");
+            SetStatus($"{definition.UnitName} completed for {FormatCostMillions(queued.cost)}.");
         }
         catch (Exception exception)
         {
+            DestroyQueuedPlacementPreview(queued);
             RefundQueuedPlacement(queued);
-            CommanderPlugin.Log.LogError($"Building placement failed: {exception}");
-            SetStatus($"{queued.definition.unitName} placement failed: {exception.Message}. Refunded {FormatCostMillions(queued.cost)}.", warning: true);
+            CommanderPlugin.Log.LogError($"Building/ship placement failed: {exception}");
+            SetStatus($"{definition.UnitName} placement failed: {exception.Message}. Refunded {FormatCostMillions(queued.cost)}.", warning: true);
         }
     }
 
@@ -631,10 +742,30 @@ internal sealed class CommanderBuildingPlacementService
     {
         for (int i = 0; i < pendingPlacements.Count; i++)
         {
+            DestroyQueuedPlacementPreview(pendingPlacements[i]);
             RefundQueuedPlacement(pendingPlacements[i]);
         }
 
         pendingPlacements.Clear();
+    }
+
+    private void DestroyQueuedPlacementPreview(QueuedPlacement queued)
+    {
+        if (queued?.previewAmmoDump != null)
+        {
+            try
+            {
+                UnityEngine.Object.Destroy(queued.previewAmmoDump.gameObject);
+            }
+            catch (Exception exception)
+            {
+                CommanderPlugin.Log.LogWarning($"Failed to destroy queued placement preview: {exception.Message}");
+            }
+            finally
+            {
+                queued.previewAmmoDump = null;
+            }
+        }
     }
 
     private static GlobalPosition SnapConstructionTargetToTerrain(GlobalPosition target)
@@ -697,9 +828,10 @@ internal sealed class CommanderBuildingPlacementService
         return target;
     }
 
-    private static float GetDefinitionCost(BuildingDefinition definition)
+    private static float NormalizeYawDegrees(float yawDegrees)
     {
-        return Mathf.Max(definition.value, MinimumBuildingCostMillions);
+        yawDegrees %= 360f;
+        return yawDegrees < 0f ? yawDegrees + 360f : yawDegrees;
     }
 
     private static string FormatCostMillions(float value)
@@ -721,15 +853,75 @@ internal sealed class CommanderBuildingPlacementService
         return Mathf.Clamp(steppedScaledMinutes, FinalMinimumBuildDelayMinutes, FinalMaximumBuildDelayMinutes);
     }
 
-    private static float NormalizeYawDegrees(float yawDegrees)
+    private void SpawnPreviewAmmoDump(GlobalPosition target, Quaternion rotation)
     {
-        yawDegrees %= 360f;
-        return yawDegrees < 0f ? yawDegrees + 360f : yawDegrees;
+        try
+        {
+            DestroyPreviewAmmoDump();
+            
+            if (ammoDumpDefinition == null)
+            {
+                return;
+            }
+
+            FactionHQ? hq = CommanderGameAccess.GetLocalHq();
+            Spawner? spawner = NetworkSceneSingleton<Spawner>.i;
+            if (hq == null || spawner == null)
+            {
+                return;
+            }
+
+            Vector3 localPosition = target.ToLocalPosition() + ammoDumpDefinition.spawnOffset;
+            previewAmmoDump = spawner.SpawnFromUnitDefinitionInEditor(
+                ammoDumpDefinition,
+                localPosition.ToGlobalPosition(),
+                rotation,
+                hq,
+                $"PREVIEW_AMMODUMP_{Time.frameCount}");
+        }
+        catch (Exception exception)
+        {
+            CommanderPlugin.Log.LogWarning($"Failed to spawn preview ammo dump: {exception.Message}");
+        }
+    }
+
+    private void DestroyPreviewAmmoDump()
+    {
+        if (previewAmmoDump != null)
+        {
+            try
+            {
+                UnityEngine.Object.Destroy(previewAmmoDump.gameObject);
+            }
+            catch (Exception exception)
+            {
+                CommanderPlugin.Log.LogWarning($"Failed to destroy preview ammo dump: {exception.Message}");
+            }
+            finally
+            {
+                previewAmmoDump = null;
+            }
+        }
+    }
+
+    private void UpdatePreviewAmmoDumpRotation()
+    {
+        if (previewAmmoDump != null)
+        {
+            try
+            {
+                previewAmmoDump.transform.rotation = BuildPlacementRotation(pendingYawDegrees);
+            }
+            catch (Exception exception)
+            {
+                CommanderPlugin.Log.LogWarning($"Failed to update preview ammo dump rotation: {exception.Message}");
+            }
+        }
     }
 
     private sealed class QueuedPlacement
     {
-        internal readonly BuildingDefinition definition;
+        internal readonly PlaceableDefinition definition;
         internal readonly GlobalPosition target;
         internal readonly float cost;
         internal readonly float buildDelaySeconds;
@@ -738,9 +930,10 @@ internal sealed class CommanderBuildingPlacementService
         internal bool timerStarted;
         internal float startedAt;
         internal float completeAt;
+        internal Unit? previewAmmoDump;
 
         internal QueuedPlacement(
-            BuildingDefinition definition,
+            PlaceableDefinition definition,
             GlobalPosition target,
             float cost,
             float buildDelaySeconds,
@@ -800,5 +993,40 @@ internal sealed class CommanderBuildingPlacementService
         {
             CommanderPlugin.Log.LogInfo(value);
         }
+    }
+}
+
+internal sealed class PlaceableDefinition
+{
+    internal readonly BuildingDefinition? BuildingDefinition;
+    internal readonly ShipDefinition? ShipDefinition;
+    internal readonly bool IsShip;
+    internal readonly string UnitName;
+    internal readonly float Value;
+    internal readonly GameObject? UnitPrefab;
+    internal readonly Vector3 SpawnOffset;
+
+    internal PlaceableDefinition(BuildingDefinition definition)
+    {
+        BuildingDefinition = definition;
+        ShipDefinition = null;
+        IsShip = false;
+        UnitName = definition.unitName;
+        Value = Mathf.Max(definition.value, 5f);
+        UnitPrefab = definition.unitPrefab;
+        SpawnOffset = definition.spawnOffset;
+    }
+
+    internal PlaceableDefinition(ShipDefinition definition)
+    {
+        BuildingDefinition = null;
+        ShipDefinition = definition;
+        IsShip = true;
+        UnitName = definition.unitName;
+        Value = definition.value;
+        UnitPrefab = definition.unitPrefab;
+        // Add vertical offset for ships so they don't clip into terrain
+        float shipVerticalOffset = Mathf.Max(10f, definition.height * 0.5f);
+        SpawnOffset = new Vector3(0f, shipVerticalOffset, 0f);
     }
 }

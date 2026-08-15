@@ -127,22 +127,22 @@ internal CommanderBuildingPlacementUi(CommanderBuildingPlacementService service,
         }
 
         float y = helpVisible ? 136f : 38f;
-        BuildingDefinition? selected = service.SelectedDefinition;
+        PlaceableDefinition? selected = service.SelectedDefinition;
         GUI.Label(
             new Rect(12f, y, windowRect.width - 24f, 24f),
-            selected != null ? $"SELECTED  {selected.unitName}" : "NO BUILDING BLUEPRINTS AVAILABLE",
+            selected != null ? $"SELECTED  {selected.UnitName}" : "NO BUILDING BLUEPRINTS AVAILABLE",
             CommanderUiTheme.Header);
         y += 30f;
 
         Rect listRect = new(12f, y, windowRect.width - 24f, windowRect.height - y - 140f);
         GUI.Box(listRect, string.Empty, CommanderUiTheme.Panel);
         CommanderUiTheme.DrawSubtleBorder(listRect, 1f);
-        float contentHeight = Mathf.Max(listRect.height - 8f, service.BuildingDefinitions.Count * 58f + 8f);
+        float contentHeight = Mathf.Max(listRect.height - 8f, service.VisibleDefinitions.Count * 58f + 8f);
         Rect viewRect = new(0f, 0f, listRect.width - 22f, contentHeight);
         scroll = GUI.BeginScrollView(listRect, scroll, viewRect);
-        for (int i = 0; i < service.BuildingDefinitions.Count; i++)
+        for (int i = 0; i < service.VisibleDefinitions.Count; i++)
         {
-            BuildingDefinition definition = service.BuildingDefinitions[i];
+            PlaceableDefinition definition = service.VisibleDefinitions[i];
             bool canAfford = service.CanAffordDefinition(definition);
             GUIStyle style = ReferenceEquals(definition, selected)
                 ? CommanderUiTheme.SelectedButton
@@ -238,6 +238,16 @@ internal CommanderBuildingPlacementUi(CommanderBuildingPlacementService service,
             "Applies to new queued builds",
             CommanderUiTheme.MutedLabel);
 
+        // Ship visibility toggle
+        bool showShips = CommanderSettings.PlacementShowShips;
+        if (GUI.Button(
+            new Rect(12f, 150f, buildTimeWindowRect.width - 24f, 30f),
+            showShips ? "✓ SHOW SHIPS IN LIST" : "✗ HIDE SHIPS IN LIST",
+            showShips ? CommanderUiTheme.Button : CommanderUiTheme.DangerButton))
+        {
+            CommanderSettings.PlacementShowShips = !CommanderSettings.PlacementShowShips;
+        }
+
         GUI.DragWindow(new Rect(0f, 0f, buildTimeWindowRect.width - 38f, 28f));
     }
 
@@ -266,7 +276,7 @@ internal CommanderBuildingPlacementUi(CommanderBuildingPlacementService service,
         }
 
         float width = Mathf.Min(320f, CommanderUiScale.Width - 24f);
-        float height = 280f;
+        float height = 320f;
         buildTimeWindowRect = new Rect(
             Mathf.Clamp(windowRect.x + windowRect.width + 10f, 12f, Mathf.Max(12f, CommanderUiScale.Width - width - 12f)),
             Mathf.Clamp(windowRect.y + 24f, 12f, Mathf.Max(12f, CommanderUiScale.Height - height - 12f)),
