@@ -17,7 +17,7 @@ internal sealed class CommanderBuildingPlacementService
     private const float MinimumBuildTimeMultiplier = 0f;
     private const float MaximumBuildTimeMultiplier = 4f;
     private const float BuildTimeMultiplierStep = 0.25f;
-    private const float OrientationStepDegrees = 5f;
+    private const float OrientationStepDegrees = 5f;  // 5-degree intervals for granular control
     private const float RefreshIntervalSeconds = 10f;
 
     private readonly CommanderMapClickTracker placementClickTracker = new();
@@ -401,7 +401,8 @@ internal sealed class CommanderBuildingPlacementService
 
     private static Quaternion BuildPlacementRotation(float yawDegrees)
     {
-        return Quaternion.Euler(0f, GetCalibratedPlacementYawDegrees(yawDegrees), 0f);
+        float calibratedYaw = GetCalibratedPlacementYawDegrees(yawDegrees);
+        return Quaternion.Euler(0f, calibratedYaw, 0f);
     }
 
     private static void EnsurePlacementCalibrationDefaults()
@@ -698,9 +699,7 @@ internal sealed class CommanderBuildingPlacementService
 
     private static float GetDefinitionCost(BuildingDefinition definition)
     {
-        return definition.value <= 0f
-            ? MinimumBuildingCostMillions
-            : definition.value;
+        return Mathf.Max(definition.value, MinimumBuildingCostMillions);
     }
 
     private static string FormatCostMillions(float value)

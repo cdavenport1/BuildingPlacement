@@ -65,8 +65,8 @@ internal static class CommanderUiTheme
         {
             normal = { background = panelTexture, textColor = Color.white },
             onNormal = { background = panelTexture, textColor = Color.white },
-            border = new RectOffset(2, 2, 2, 2),
-            padding = new RectOffset(10, 10, 28, 10),
+            border = new RectOffset(1, 1, 1, 1),
+            padding = new RectOffset(8, 8, 24, 8),
             fontSize = 14,
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.UpperLeft
@@ -74,8 +74,8 @@ internal static class CommanderUiTheme
         Panel = new GUIStyle(GUI.skin.box)
         {
             normal = { background = raisedTexture, textColor = Label.normal.textColor },
-            border = new RectOffset(1, 1, 1, 1),
-            padding = new RectOffset(8, 8, 8, 8)
+            border = new RectOffset(0, 0, 0, 0),
+            padding = new RectOffset(6, 6, 6, 6)
         };
         Button = new GUIStyle(GUI.skin.button)
         {
@@ -83,9 +83,9 @@ internal static class CommanderUiTheme
             hover = { background = buttonHoverTexture, textColor = Color.white },
             active = { background = buttonActiveTexture, textColor = Color.white },
             focused = { background = buttonHoverTexture, textColor = Color.white },
-            border = new RectOffset(1, 1, 1, 1),
-            padding = new RectOffset(8, 8, 5, 5),
-            fontSize = 12,
+            border = new RectOffset(0, 0, 0, 0),
+            padding = new RectOffset(10, 10, 6, 6),
+            fontSize = 11,
             alignment = TextAnchor.MiddleCenter,
             wordWrap = true
         };
@@ -127,6 +127,18 @@ internal static class CommanderUiTheme
         GUI.DrawTexture(new Rect(rect.x, rect.yMax - thickness, rect.width, thickness), borderTexture!);
         GUI.DrawTexture(new Rect(rect.x, rect.y, thickness, rect.height), borderTexture!);
         GUI.DrawTexture(new Rect(rect.xMax - thickness, rect.y, thickness, rect.height), borderTexture!);
+    }
+
+    internal static void DrawSubtleBorder(Rect rect, float thickness = 1f)
+    {
+        Ensure();
+        Color subtleColor = new Color(0.34f, 0.78f, 0.75f, 0.3f);
+        GUI.color = subtleColor;
+        GUI.DrawTexture(new Rect(rect.x, rect.y, rect.width, thickness), Texture2D.whiteTexture);
+        GUI.DrawTexture(new Rect(rect.x, rect.yMax - thickness, rect.width, thickness), Texture2D.whiteTexture);
+        GUI.DrawTexture(new Rect(rect.x, rect.y, thickness, rect.height), Texture2D.whiteTexture);
+        GUI.DrawTexture(new Rect(rect.xMax - thickness, rect.y, thickness, rect.height), Texture2D.whiteTexture);
+        GUI.color = Color.white;
     }
 
     internal static bool DrawHelpButton(float windowWidth, ref bool visible)

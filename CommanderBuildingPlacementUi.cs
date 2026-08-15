@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 namespace NuclearOptionCommander;
@@ -8,7 +9,9 @@ internal sealed class CommanderBuildingPlacementUi
     private const int BuildTimeWindowId = 0x434F4D43;
 
     private readonly CommanderBuildingPlacementService service;
+    private Action? onExit;
     private bool visible;
+    private bool minimized;
     private bool helpVisible;
     private bool buildTimeControlsVisible;
     private bool buildTimeWindowPositionInitialized;
@@ -17,12 +20,24 @@ internal sealed class CommanderBuildingPlacementUi
     private Rect buildTimeWindowRect;
     private Vector2 scroll;
 
-    internal CommanderBuildingPlacementUi(CommanderBuildingPlacementService service)
+internal CommanderBuildingPlacementUi(CommanderBuildingPlacementService service, Action? onExit = null)
     {
         this.service = service;
+        this.onExit = onExit;
     }
 
     internal bool Visible => visible;
+    internal bool Minimized => minimized;
+
+    internal void Minimize()
+    {
+        minimized = true;
+    }
+
+    internal void Unminimize()
+    {
+        minimized = false;
+    }
 
     internal void Toggle()
     {
@@ -35,6 +50,7 @@ internal sealed class CommanderBuildingPlacementUi
     internal void Hide()
     {
         visible = false;
+        minimized = false;
         helpVisible = false;
         buildTimeControlsVisible = false;
         if (service.AwaitingPlacementSelection)
@@ -45,7 +61,7 @@ internal sealed class CommanderBuildingPlacementUi
 
     internal void Draw()
     {
-        if (!visible)
+        if (!visible || minimized)
         {
             return;
         }
@@ -118,8 +134,9 @@ internal sealed class CommanderBuildingPlacementUi
             CommanderUiTheme.Header);
         y += 30f;
 
-        Rect listRect = new(12f, y, windowRect.width - 24f, windowRect.height - y - 122f);
+        Rect listRect = new(12f, y, windowRect.width - 24f, windowRect.height - y - 140f);
         GUI.Box(listRect, string.Empty, CommanderUiTheme.Panel);
+        CommanderUiTheme.DrawSubtleBorder(listRect, 1f);
         float contentHeight = Mathf.Max(listRect.height - 8f, service.BuildingDefinitions.Count * 58f + 8f);
         Rect viewRect = new(0f, 0f, listRect.width - 22f, contentHeight);
         scroll = GUI.BeginScrollView(listRect, scroll, viewRect);
@@ -144,6 +161,17 @@ internal sealed class CommanderBuildingPlacementUi
         GUI.EndScrollView();
 
         float buttonY = windowRect.height - 104f;
+        
+        // Display status text above the buttons
+        string status = service.StatusText;
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            GUI.Label(
+                new Rect(14f, buttonY - 50f, windowRect.width - 28f, 42f),
+                status,
+                CommanderUiTheme.MutedLabel);
+        }
+
         bool oldEnabled = GUI.enabled;
         GUI.enabled = oldEnabled && selected != null;
         if (GUI.Button(
@@ -162,13 +190,13 @@ internal sealed class CommanderBuildingPlacementUi
         }
         GUI.enabled = oldEnabled;
 
-        string status = service.StatusText;
-        if (!string.IsNullOrWhiteSpace(status))
+        // EXIT button below SELECT LOCATION
+        if (GUI.Button(
+            new Rect(12f, buttonY + 42f, windowRect.width - 24f, 38f),
+            "EXIT",
+            CommanderUiTheme.DangerButton))
         {
-            GUI.Label(
-                new Rect(14f, windowRect.height - 60f, windowRect.width - 28f, 42f),
-                status,
-                CommanderUiTheme.MutedLabel);
+            onExit?.Invoke();
         }
 
         GUI.DragWindow(new Rect(0f, 0f, windowRect.width - 72f, 28f));
@@ -193,7 +221,7 @@ internal sealed class CommanderBuildingPlacementUi
             new Rect(previewRect.x + 10f, previewRect.y + 8f, previewRect.width - 20f, 24f),
             service.BuildTimePreviewLabel,
             CommanderUiTheme.MutedLabel);
-        CommanderUiTheme.DrawFrame(previewRect, 1f);
+        CommanderUiTheme.DrawSubtleBorder(previewRect, 1f);
 
         if (GUI.Button(new Rect(12f, 112f, 46f, 30f), "-", CommanderUiTheme.Button))
         {
@@ -209,51 +237,6 @@ internal sealed class CommanderBuildingPlacementUi
             new Rect(120f, 112f, buildTimeWindowRect.width - 132f, 30f),
             "Applies to new queued builds",
             CommanderUiTheme.MutedLabel);
-
-        GUI.Label(
-            new Rect(12f, 150f, buildTimeWindowRect.width - 24f, 22f),
-            service.OrientationOffsetLabel,
-            CommanderUiTheme.Header);
-
-        if (GUI.Button(new Rect(12f, 176f, 46f, 28f), "-5", CommanderUiTheme.Button))
-        {
-            service.AdjustOrientationOffset(-5f);
-        }
-
-        if (GUI.Button(new Rect(64f, 176f, 46f, 28f), "+5", CommanderUiTheme.Button))
-        {
-            service.AdjustOrientationOffset(5f);
-        }
-
-        if (GUI.Button(new Rect(118f, 176f, 44f, 28f), "0", CommanderUiTheme.Button))
-        {
-            service.SetOrientationOffset(0f);
-        }
-
-        if (GUI.Button(new Rect(166f, 176f, 44f, 28f), "90", CommanderUiTheme.Button))
-        {
-            service.SetOrientationOffset(90f);
-        }
-
-        if (GUI.Button(new Rect(214f, 176f, 44f, 28f), "180", CommanderUiTheme.Button))
-        {
-            service.SetOrientationOffset(180f);
-        }
-
-        if (GUI.Button(new Rect(262f, 176f, 44f, 28f), "270", CommanderUiTheme.Button))
-        {
-            service.SetOrientationOffset(270f);
-        }
-
-        if (GUI.Button(new Rect(12f, 210f, buildTimeWindowRect.width - 24f, 28f), service.OrientationScrollLabel, CommanderUiTheme.Button))
-        {
-            service.ToggleOrientationScrollDirection();
-        }
-
-        if (GUI.Button(new Rect(12f, 242f, buildTimeWindowRect.width - 24f, 28f), "RESET ORIENTATION CALIBRATION", CommanderUiTheme.DangerButton))
-        {
-            service.ResetOrientationCalibration();
-        }
 
         GUI.DragWindow(new Rect(0f, 0f, buildTimeWindowRect.width - 38f, 28f));
     }
