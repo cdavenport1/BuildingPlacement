@@ -21,6 +21,7 @@ internal sealed class BuildingPlacementController : MonoBehaviour
     private Rect launcherRect;
     private bool launcherInitialized;
     private bool gameInProgress;
+    private bool previousMapMaximized;
     private GameObject? hiddenVirtualMfd;
     private bool virtualMfdWasActive;
 
@@ -70,6 +71,15 @@ internal sealed class BuildingPlacementController : MonoBehaviour
 
         service?.TickPersistent();
         mapService?.Tick();
+
+        // Auto-close plugin map if default game map is opened
+        bool currentMapMaximized = DynamicMap.mapMaximized;
+        if (currentMapMaximized && !previousMapMaximized && mapService?.IsActive == true)
+        {
+            // Default map just opened, close plugin map to restore MFD
+            mapService?.Close();
+        }
+        previousMapMaximized = currentMapMaximized;
 
         if (service?.AwaitingPlacementSelection == true)
         {
@@ -793,10 +803,11 @@ internal sealed class BuildingPlacementController : MonoBehaviour
 
             Vector2 guiPoint = CommanderUiScale.ScreenToGui(new Vector2(screenPoint.x, screenPoint.y));
             string countdown = FormatCountdown(pending[i].remainingSeconds);
+            string depotType = pending[i].isShip ? "Large Factory" : pending[i].isVehicle ? "Vehicle Depot" : "Jackknife";
             string text = pending[i].remainingSeconds < 0f
-                ? $"{pending[i].name}\nWAITING\nJackknife < {pending[i].jackknifeRadius:0}m"
+                ? $"{pending[i].name}\nWAITING\n{depotType} < {pending[i].jackknifeRadius:0}m"
                 : $"{pending[i].name}\n{countdown}";
-            float width = Mathf.Max(170f, style.CalcSize(new GUIContent(text)).x + 18f);
+            float width = Mathf.Max(190f, style.CalcSize(new GUIContent(text)).x + 20f);
             float height = pending[i].remainingSeconds < 0f ? 60f : 48f;
             Rect marker = new(guiPoint.x + 12f, guiPoint.y - (pending[i].remainingSeconds < 0f ? 72f : 52f), width, height);
             GUI.Box(marker, text, style);

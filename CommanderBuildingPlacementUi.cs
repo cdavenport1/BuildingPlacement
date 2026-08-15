@@ -101,11 +101,38 @@ internal CommanderBuildingPlacementUi(CommanderBuildingPlacementService service,
 
     private void DrawWindow(int _)
     {
+        // Retrieve selected definition early to determine help text
+        PlaceableDefinition? selected = service.SelectedDefinition;
+        
+        // Build dynamic help text based on selected definition type
+        string helpText = "Choose a building blueprint, then place it by clicking a point on the tactical map or in the 3D world. This mod does not wire into the main commander UI.";
+        if (selected != null)
+        {
+            if (selected.IsVehicle)
+            {
+                helpText = "SELECT a ground vehicle, then CLICK TO PLACE it. It MUST be placed within 75m of a Vehicle Depot to spawn there. Placement times out in 5 seconds if no depot is found.";
+            }
+            else if (selected.IsShip)
+            {
+                // Calculate ship-specific Large Factory distance
+                ShipDefinition? shipDef = selected.ShipDefinition;
+                float shipSize = shipDef != null ? Mathf.Max(shipDef.width, shipDef.height, shipDef.length) : 0f;
+                float shipSizeMultiplier = Mathf.Max(0f, (shipSize - 20f) / 30f);
+                float shipRadiusFromSize = 350f + shipSizeMultiplier * 450f;
+                float shipRadius = Mathf.Clamp(shipRadiusFromSize, 350f, 800f);
+                helpText = $"SELECT a ship, then CLICK TO PLACE it on water. It MUST be placed between 350m and {shipRadius:0}m from a Large Factory to spawn there. Placement times out in 5 seconds if no factory is found.";
+            }
+            else
+            {
+                helpText = "Choose a building blueprint, then click to place it. A Jackknife must be nearby to construct the building. This mod does not wire into the main commander UI.";
+            }
+        }
+        
         if (CommanderUiTheme.DrawHelpButton(windowRect.width, ref helpVisible))
         {
             CommanderUiTheme.DrawHelpOverlay(
-                new Rect(12f, 34f, windowRect.width - 24f, 92f),
-                "Choose a building blueprint, then place it by clicking a point on the tactical map or in the 3D world. This mod does not wire into the main commander UI.");
+                new Rect(20f, windowRect.height - 300f, windowRect.width - 40f, 180f),
+                helpText);
         }
 
         if (GUI.Button(
@@ -126,38 +153,86 @@ internal CommanderBuildingPlacementUi(CommanderBuildingPlacementService service,
             }
         }
 
-        float y = helpVisible ? 136f : 38f;
-        PlaceableDefinition? selected = service.SelectedDefinition;
+        float y = helpVisible ? 158f : 38f;
         GUI.Label(
             new Rect(12f, y, windowRect.width - 24f, 24f),
             selected != null ? $"SELECTED  {selected.UnitName}" : "NO BUILDING BLUEPRINTS AVAILABLE",
             CommanderUiTheme.Header);
         y += 30f;
 
-        Rect listRect = new(12f, y, windowRect.width - 24f, windowRect.height - y - 140f);
+        // Faction Funds Display
+        FactionHQ? hq = CommanderGameAccess.GetLocalHq();
+        string fundsText = hq != null ? $"FACTION FUNDS  {CommanderBuildingPlacementService.FormatCostMillions(hq.factionFunds)}" : "FACTION FUNDS  UNAVAILABLE";
+        GUI.Label(
+            new Rect(12f, y, windowRect.width - 24f, 24f),
+            fundsText,
+            CommanderUiTheme.Label);
+        y += 32f;
+
+        Rect listRect = new(12f, y, windowRect.width - 24f, windowRect.height - y - 150f);
         GUI.Box(listRect, string.Empty, CommanderUiTheme.Panel);
         CommanderUiTheme.DrawSubtleBorder(listRect, 1f);
-        float contentHeight = Mathf.Max(listRect.height - 8f, service.VisibleDefinitions.Count * 58f + 8f);
+
+        // Calculate content height including category headers
+        int visibleItemCount = 0;
+        foreach (PlaceableDefinition def in service.VisibleDefinitions)
+        {
+            if (service.IsCategoryExpanded(def.Category))
+            {
+                visibleItemCount++;
+            }
+        }
+
+        // 3 category headers (40px each) + visible items (58px each) + padding
+        float contentHeight = Mathf.Max(listRect.height - 8f, 3 * 40f + visibleItemCount * 58f + 8f);
         Rect viewRect = new(0f, 0f, listRect.width - 22f, contentHeight);
         scroll = GUI.BeginScrollView(listRect, scroll, viewRect);
-        for (int i = 0; i < service.VisibleDefinitions.Count; i++)
+
+        float currentY = 4f;
+        BuildCategory? lastCategory = null;
+        int itemIndex = 0;
+
+        foreach (PlaceableDefinition definition in service.VisibleDefinitions)
         {
-            PlaceableDefinition definition = service.VisibleDefinitions[i];
-            bool canAfford = service.CanAffordDefinition(definition);
-            GUIStyle style = ReferenceEquals(definition, selected)
-                ? CommanderUiTheme.SelectedButton
-                : CommanderUiTheme.Button;
-            bool previousEnabled = GUI.enabled;
-            GUI.enabled = previousEnabled && canAfford;
-            if (GUI.Button(
-                new Rect(4f, 4f + i * 58f, viewRect.width - 8f, 50f),
-                service.GetDefinitionLabel(definition),
-                style))
+            // Draw category header when we encounter a new category
+            if (lastCategory != definition.Category)
             {
-                service.SelectDefinition(i);
+                lastCategory = definition.Category;
+                bool isExpanded = service.IsCategoryExpanded(definition.Category);
+                string headerText = $"{(isExpanded ? "▼" : "▶")} {definition.Category}";
+
+                if (GUI.Button(
+                    new Rect(4f, currentY, viewRect.width - 8f, 36f),
+                    headerText,
+                    CommanderUiTheme.Button))
+                {
+                    service.ToggleCategoryExpanded(definition.Category);
+                }
+                currentY += 40f;
             }
-            GUI.enabled = previousEnabled;
+
+            // Draw item only if category is expanded
+            if (service.IsCategoryExpanded(definition.Category))
+            {
+                bool canAfford = service.CanAffordDefinition(definition);
+                GUIStyle style = ReferenceEquals(definition, selected)
+                    ? CommanderUiTheme.SelectedButton
+                    : CommanderUiTheme.Button;
+                bool previousEnabled = GUI.enabled;
+                GUI.enabled = previousEnabled && canAfford;
+                if (GUI.Button(
+                    new Rect(4f, currentY, viewRect.width - 8f, 50f),
+                    service.GetDefinitionLabel(definition),
+                    style))
+                {
+                    service.SelectDefinition(itemIndex);
+                }
+                GUI.enabled = previousEnabled;
+                currentY += 58f;
+            }
+            itemIndex++;
         }
+
         GUI.EndScrollView();
 
         float buttonY = windowRect.height - 104f;
@@ -238,16 +313,6 @@ internal CommanderBuildingPlacementUi(CommanderBuildingPlacementService service,
             "Applies to new queued builds",
             CommanderUiTheme.MutedLabel);
 
-        // Ship visibility toggle
-        bool showShips = CommanderSettings.PlacementShowShips;
-        if (GUI.Button(
-            new Rect(12f, 150f, buildTimeWindowRect.width - 24f, 30f),
-            showShips ? "✓ SHOW SHIPS IN LIST" : "✗ HIDE SHIPS IN LIST",
-            showShips ? CommanderUiTheme.Button : CommanderUiTheme.DangerButton))
-        {
-            CommanderSettings.PlacementShowShips = !CommanderSettings.PlacementShowShips;
-        }
-
         GUI.DragWindow(new Rect(0f, 0f, buildTimeWindowRect.width - 38f, 28f));
     }
 
@@ -259,7 +324,7 @@ internal CommanderBuildingPlacementUi(CommanderBuildingPlacementService service,
         }
 
         float width = Mathf.Min(470f, CommanderUiScale.Width - 24f);
-        float height = Mathf.Min(620f, CommanderUiScale.Height - 24f);
+        float height = Mathf.Min(800f, CommanderUiScale.Height - 24f);
         windowRect = new Rect(
             74f,
             Mathf.Max(12f, (CommanderUiScale.Height - height) * 0.5f),

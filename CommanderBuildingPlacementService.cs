@@ -6,6 +6,13 @@ using UnityEngine;
 
 namespace NuclearOptionCommander;
 
+internal enum BuildCategory
+{
+    Structures,
+    Naval,
+    Vehicles
+}
+
 internal sealed class CommanderBuildingPlacementService
 {
     private const float MinimumBuildingCostMillions = 5f;
@@ -19,11 +26,19 @@ internal sealed class CommanderBuildingPlacementService
     private const float BuildTimeMultiplierStep = 0.25f;
     private const float OrientationStepDegrees = 5f;  // 5-degree intervals for granular control
     private const float RefreshIntervalSeconds = 10f;
+    private const float ShipLargeFactorySearchTimeoutSeconds = 5f;  // Ship placements timeout after 5 seconds if no Large Factory found
+    private const float VehicleDepotSearchTimeoutSeconds = 5f;  // Vehicle placements timeout after 5 seconds if no depot found
 
     private readonly CommanderMapClickTracker placementClickTracker = new();
     private readonly CommanderPlacementCursorState placementCursorState = new();
     private readonly List<PlaceableDefinition> placeableDefinitions = new();
     private readonly List<QueuedPlacement> pendingPlacements = new();
+    private readonly Dictionary<BuildCategory, bool> categoryExpandedState = new()
+    {
+        { BuildCategory.Structures, true },
+        { BuildCategory.Naval, true },
+        { BuildCategory.Vehicles, true }
+    };
     private bool awaitingPlacementSelection;
     private bool awaitingOrientationConfirmation;
     private GlobalPosition pendingPlacementTarget;
@@ -43,13 +58,12 @@ internal sealed class CommanderBuildingPlacementService
     {
         get
         {
-            if (CommanderSettings.PlacementShowShips)
-            {
-                return placeableDefinitions;
-            }
-
-            // Filter out ships
-            return placeableDefinitions.Where(d => !d.IsShip).ToList();
+            // Group by category, sort within each group, flatten results
+            return placeableDefinitions
+                .GroupBy(d => d.Category)
+                .OrderBy(g => g.Key)
+                .SelectMany(g => g.OrderBy(d => d.UnitName, StringComparer.OrdinalIgnoreCase))
+                .ToList();
         }
     }
 
@@ -141,10 +155,25 @@ internal sealed class CommanderBuildingPlacementService
                 queued.definition.UnitName,
                 queued.target,
                 remainingSeconds,
-                radius);
+                radius,
+                queued.definition.IsShip,
+                queued.definition.IsVehicle);
         }
 
         return statuses;
+    }
+
+    internal void ToggleCategoryExpanded(BuildCategory category)
+    {
+        if (categoryExpandedState.ContainsKey(category))
+        {
+            categoryExpandedState[category] = !categoryExpandedState[category];
+        }
+    }
+
+    internal bool IsCategoryExpanded(BuildCategory category)
+    {
+        return categoryExpandedState.TryGetValue(category, out bool expanded) && expanded;
     }
 
     internal void Activate()
@@ -309,6 +338,40 @@ internal sealed class CommanderBuildingPlacementService
             return false;
         }
 
+        PlaceableDefinition? definition = SelectedDefinition;
+        
+        // Ships skip validation - use fixed sea level plane intersection
+        if (definition?.IsShip == true)
+        {
+            Ray ray = UnityEngine.Camera.main.ScreenPointToRay(screenPosition);
+            // Find intersection with sea level plane
+            // Ray equation: P = ray.origin + t * ray.direction
+            // Plane equation: y = Datum.LocalSeaY
+            // Solve: ray.origin.y + t * ray.direction.y = Datum.LocalSeaY
+            
+            float rayOriginY = ray.origin.y;
+            float rayDirectionY = ray.direction.y;
+            
+            // Avoid division by zero if ray is parallel to plane
+            if (Mathf.Abs(rayDirectionY) > 0.001f)
+            {
+                float t = (Datum.LocalSeaY - rayOriginY) / rayDirectionY;
+                if (t > 0f)  // Only accept intersections in front of camera
+                {
+                    Vector3 intersectionPoint = ray.origin + ray.direction * t;
+                    GlobalPosition shipPosition = intersectionPoint.ToGlobalPosition();
+                    
+                    BeginOrientationConfirmation(shipPosition);
+                    return true;
+                }
+            }
+            
+            // Fallback if ray doesn't intersect plane properly
+            SetStatus("Could not determine water placement position.");
+            return true;
+        }
+        
+        // For non-ships, require terrain raycast
         if (!CommanderGameAccess.TryRaycastWorldPosition(screenPosition, out GlobalPosition target))
         {
             SetStatus("No valid terrain position was found.");
@@ -353,7 +416,8 @@ internal sealed class CommanderBuildingPlacementService
         
         foreach (BuildingDefinition building in buildings)
         {
-            placeableDefinitions.Add(new PlaceableDefinition(building));
+            PlaceableDefinition def = new PlaceableDefinition(building);
+            placeableDefinitions.Add(def);
         }
         
         // Load ships
@@ -365,14 +429,29 @@ internal sealed class CommanderBuildingPlacementService
                 ShipDefinition ship = encyclopedia.ships[i];
                 if (ship != null && ship.unitPrefab != null && ship.unitPrefab.GetComponent<Ship>() != null)
                 {
-                    placeableDefinitions.Add(new PlaceableDefinition(ship));
+                    PlaceableDefinition def = new PlaceableDefinition(ship);
+                    placeableDefinitions.Add(def);
                 }
             }
         }
         
-        // Sort all by name
-        placeableDefinitions.Sort((left, right) => 
-            string.Compare(left.UnitName, right.UnitName, StringComparison.OrdinalIgnoreCase));
+        // Load vehicles
+        VehicleDefinition[] vehicles = Resources.FindObjectsOfTypeAll<VehicleDefinition>();
+        foreach (VehicleDefinition vehicle in vehicles)
+        {
+            if (vehicle != null && vehicle.unitPrefab != null && vehicle.unitPrefab.GetComponent<GroundVehicle>() != null)
+            {
+                PlaceableDefinition def = new PlaceableDefinition(vehicle);
+                placeableDefinitions.Add(def);
+            }
+        }
+        
+        // Sort all by category, then by name
+        placeableDefinitions.Sort((left, right) =>
+        {
+            int categoryCompare = left.Category.CompareTo(right.Category);
+            return categoryCompare != 0 ? categoryCompare : string.Compare(left.UnitName, right.UnitName, StringComparison.OrdinalIgnoreCase);
+        });
 
         if (placeableDefinitions.Count == 0)
         {
@@ -395,7 +474,8 @@ internal sealed class CommanderBuildingPlacementService
     private void BeginOrientationConfirmation(GlobalPosition target)
     {
         awaitingOrientationConfirmation = true;
-        pendingPlacementTarget = SnapConstructionTargetToTerrain(target);
+        // Ships should not be snapped to terrain - use their position as-is with default offset
+        pendingPlacementTarget = SelectedDefinition?.IsShip == true ? target : SnapConstructionTargetToTerrain(target);
         pendingYawDegrees = 0f;
         SpawnPreviewAmmoDump(pendingPlacementTarget, BuildPlacementRotation(pendingYawDegrees));
         SetStatus("Scroll mouse wheel to rotate. Press Enter to confirm placement.");
@@ -431,11 +511,16 @@ internal sealed class CommanderBuildingPlacementService
         float calibratedYaw = GetCalibratedPlacementYawDegrees(yawDegrees);
         Quaternion rotation = BuildPlacementRotation(yawDegrees);
 
+        // Ships should not be snapped to terrain - use their position as-is with default offset
+        GlobalPosition finalTarget = definition.IsShip ? target : SnapConstructionTargetToTerrain(target);
+
         hq.AddFunds(-cost);
+        float largeFactoryRadius = GetLargeFactoryActivationRadius(definition);
+        float vehicleDepotRadius = GetVehicleDepotActivationRadius();
         float jackknifeRadius = GetJackknifeActivationRadius(definition);
         QueuedPlacement placement = new QueuedPlacement(
             definition,
-            target,
+            finalTarget,
             cost,
             buildDelaySeconds,
             $"NOC_BUILD_{definition.UnitName}_{Time.frameCount}",
@@ -453,7 +538,20 @@ internal sealed class CommanderBuildingPlacementService
         pendingYawDegrees = 0f;
         placementClickTracker.Reset();
         placementCursorState.Deactivate();
-        SetStatus($"{definition.UnitName} queued ({FormatCostMillions(cost)}). Waiting for Jackknife within {jackknifeRadius:0}m. Heading {Mathf.RoundToInt(calibratedYaw):000}.");
+        
+        // Display appropriate status message based on unit type
+        if (definition.IsShip)
+        {
+            SetStatus($"{definition.UnitName} queued ({FormatCostMillions(cost)}). Waiting for Large Factory within {largeFactoryRadius:0}m. Heading {Mathf.RoundToInt(calibratedYaw):000}.");
+        }
+        else if (definition.IsVehicle)
+        {
+            SetStatus($"{definition.UnitName} queued ({FormatCostMillions(cost)}). Waiting for Vehicle Depot within {vehicleDepotRadius:0}m. Heading {Mathf.RoundToInt(calibratedYaw):000}.");
+        }
+        else
+        {
+            SetStatus($"{definition.UnitName} queued ({FormatCostMillions(cost)}). Waiting for Jackknife within {jackknifeRadius:0}m. Heading {Mathf.RoundToInt(calibratedYaw):000}.");
+        }
     }
 
     private static Quaternion BuildPlacementRotation(float yawDegrees)
@@ -490,6 +588,45 @@ internal sealed class CommanderBuildingPlacementService
         for (int i = pendingPlacements.Count - 1; i >= 0; i--)
         {
             QueuedPlacement queued = pendingPlacements[i];
+            
+            // Check for ship large factory search timeout
+            if (queued.definition.IsShip && !queued.timerStarted)
+            {
+                float factorySearchElapsed = Time.unscaledTime - queued.createdAt;
+                if (factorySearchElapsed > ShipLargeFactorySearchTimeoutSeconds)
+                {
+                    // Timeout: refund and remove placement
+                    FactionHQ? hq = CommanderGameAccess.GetLocalHq();
+                    if (hq != null)
+                    {
+                        hq.AddFunds(queued.cost);
+                    }
+                    DestroyQueuedPlacementPreview(queued);
+                    pendingPlacements.RemoveAt(i);
+                    SetStatus($"{queued.definition.UnitName} placement cancelled: no Large Factory found within {ShipLargeFactorySearchTimeoutSeconds:0}s. Refunded {FormatCostMillions(queued.cost)}.", warning: true);
+                    continue;
+                }
+            }
+            
+            // Check for vehicle depot search timeout
+            if (queued.definition.IsVehicle && !queued.timerStarted)
+            {
+                float depotSearchElapsed = Time.unscaledTime - queued.createdAt;
+                if (depotSearchElapsed > VehicleDepotSearchTimeoutSeconds)
+                {
+                    // Timeout: refund and remove placement
+                    FactionHQ? hq = CommanderGameAccess.GetLocalHq();
+                    if (hq != null)
+                    {
+                        hq.AddFunds(queued.cost);
+                    }
+                    DestroyQueuedPlacementPreview(queued);
+                    pendingPlacements.RemoveAt(i);
+                    SetStatus($"{queued.definition.UnitName} placement cancelled: no Vehicle Depot found within {VehicleDepotSearchTimeoutSeconds:0}s. Refunded {FormatCostMillions(queued.cost)}.", warning: true);
+                    continue;
+                }
+            }
+            
             if (!queued.timerStarted)
             {
                 if (!TryStartQueuedPlacementTimer(queued))
@@ -525,16 +662,65 @@ internal sealed class CommanderBuildingPlacementService
         }
 
         Vector3 buildingPosition = queued.target.ToLocalPosition() + queued.definition.SpawnOffset;
-        float radius = GetJackknifeActivationRadius(queued.definition);
-        if (!TryFindNearbyJackknife(buildingPosition, radius, out _))
+        
+        // Check if this is a ship - requires nearby Large Factory and minimum 350m distance
+        if (queued.definition.IsShip)
         {
-            return false;
+            float factoryRadius = GetLargeFactoryActivationRadius(queued.definition);
+            if (!TryFindNearbyLargeFactory(buildingPosition, factoryRadius, out Unit? factory) || factory == null)
+            {
+                return false;
+            }
+
+            // Check minimum distance from factory (must be at least 350m away)
+            float distanceToFactory = Vector3.Distance(factory.transform.position, buildingPosition);
+            if (distanceToFactory < 350f)
+            {
+                SetStatus($"Ship placed too close to Large Factory. Minimum distance 350m required. Current distance: {distanceToFactory:0}m", warning: true);
+                return false;
+            }
+        }
+        // Check if this is a vehicle - requires nearby vehicle depot
+        else if (queued.definition.IsVehicle)
+        {
+            float depotRadius = GetVehicleDepotActivationRadius();
+            if (!TryFindNearbyVehicleDepot(buildingPosition, depotRadius, out _))
+            {
+                return false;
+            }
+        }
+        else
+        {
+            // Buildings require nearby Jackknife
+            float radius = GetJackknifeActivationRadius(queued.definition);
+            if (!TryFindNearbyJackknife(buildingPosition, radius, out _))
+            {
+                return false;
+            }
         }
 
         queued.timerStarted = true;
         queued.startedAt = Time.unscaledTime;
         queued.completeAt = queued.startedAt + queued.buildDelaySeconds;
         return true;
+    }
+
+    private static BuildCategory DetermineBuildCategory(PlaceableDefinition definition)
+    {
+        // Ships are Naval
+        if (definition.IsShip)
+        {
+            return BuildCategory.Naval;
+        }
+
+        // Vehicles are Vehicles
+        if (definition.IsVehicle)
+        {
+            return BuildCategory.Vehicles;
+        }
+
+        // Everything else is Structures
+        return BuildCategory.Structures;
     }
 
     private static bool TryFindNearbyJackknife(Vector3 buildingPosition, float radius, out Unit? jackknife)
@@ -589,28 +775,107 @@ internal sealed class CommanderBuildingPlacementService
             || normalizedObjectName.Contains("dozer1");
     }
 
-    private static float GetJackknifeActivationRadius(PlaceableDefinition definition)
+    private static bool TryFindNearbyLargeFactory(Vector3 shipPosition, float radius, out Unit? factory)
     {
-        // Ships require a minimum 160m Jackknife activation radius with size-based scaling
+        factory = null;
+        Unit[] units = UnityEngine.Object.FindObjectsOfType<Unit>();
+        for (int i = 0; i < units.Length; i++)
+        {
+            Unit unit = units[i];
+            if (unit == null || !IsLargeFactoryUnit(unit))
+            {
+                continue;
+            }
+
+            if (Vector3.Distance(unit.transform.position, shipPosition) <= radius)
+            {
+                factory = unit;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsLargeFactoryUnit(Unit unit)
+    {
+        Type type = unit.GetType();
+        string normalizedName = new string(type.Name
+            .Where(ch => char.IsLetterOrDigit(ch))
+            .ToArray())
+            .ToLowerInvariant();
+        string normalizedFullName = new string((type.FullName ?? string.Empty)
+            .Where(ch => char.IsLetterOrDigit(ch))
+            .ToArray())
+            .ToLowerInvariant();
+        string normalizedObjectName = new string((unit.gameObject.name ?? string.Empty)
+            .Where(ch => char.IsLetterOrDigit(ch))
+            .ToArray())
+            .ToLowerInvariant();
+
+        return normalizedName.Contains("factorylarge")
+            || normalizedFullName.Contains("factorylarge")
+            || normalizedObjectName.Contains("factorylarge");
+    }
+
+    private static bool TryFindNearbyVehicleDepot(Vector3 vehiclePosition, float radius, out VehicleDepot? depot)
+    {
+        depot = null;
+        VehicleDepot[] depots = UnityEngine.Object.FindObjectsOfType<VehicleDepot>();
+        for (int i = 0; i < depots.Length; i++)
+        {
+            VehicleDepot vehicleDepot = depots[i];
+            if (vehicleDepot == null)
+            {
+                continue;
+            }
+
+            if (Vector3.Distance(vehicleDepot.transform.position, vehiclePosition) <= radius)
+            {
+                depot = vehicleDepot;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static float GetVehicleDepotActivationRadius()
+    {
+        // Vehicles require a fixed radius to be near a depot
+        // Smaller than Jackknife since depots are more common than construction vehicles
+        return 75f;
+    }
+
+    private static float GetLargeFactoryActivationRadius(PlaceableDefinition definition)
+    {
+        // Ships require a minimum 350m Large Factory activation radius with size-based scaling
         if (definition.IsShip)
         {
             ShipDefinition? ship = definition.ShipDefinition;
             if (ship == null)
             {
-                return 160f;
+                return 350f;
             }
 
             // Scale up based on ship size dimensions
             float shipSize = Mathf.Max(ship.width, ship.height, ship.length);
             float shipSizeMultiplier = Mathf.Max(0f, (shipSize - 20f) / 30f);
-            float shipRadiusFromSize = 160f + shipSizeMultiplier * 90f;
-            return Mathf.Clamp(shipRadiusFromSize, 160f, 340f);
+            float shipRadiusFromSize = 350f + shipSizeMultiplier * 450f;
+            return Mathf.Clamp(shipRadiusFromSize, 350f, 800f);
         }
 
+        return 160f;
+    }
+
+    private static float GetJackknifeActivationRadius(PlaceableDefinition definition)
+    {
+        // Ships now use Large Factory instead (see GetLargeFactoryActivationRadius)
+        // This method is only used for buildings
         BuildingDefinition? building = definition.BuildingDefinition;
         if (building == null)
         {
-            return 25f;
+            return 50f;
         }
 
         string typeKey = (building.unitName ?? string.Empty) + " " + (building.jsonKey ?? string.Empty);
@@ -636,7 +901,7 @@ internal sealed class CommanderBuildingPlacementService
             return 55f;
         }
 
-        float baseRadius = 25f;
+        float baseRadius = 50f;
         if (building.unitPrefab == null)
         {
             return baseRadius;
@@ -692,7 +957,17 @@ internal sealed class CommanderBuildingPlacementService
                     1f,
                     holdPosition: false);
             }
-            else if (!definition.IsShip && definition.BuildingDefinition != null)
+            else if (definition.IsVehicle && definition.VehicleDefinition != null)
+            {
+                // Spawn ground vehicle (same as building)
+                unit = spawner.SpawnFromUnitDefinitionInEditor(
+                    definition.VehicleDefinition,
+                    localPosition.ToGlobalPosition(),
+                    queued.rotation,
+                    hq,
+                    queued.spawnName);
+            }
+            else if (definition.BuildingDefinition != null)
             {
                 // Spawn building
                 unit = spawner.SpawnFromUnitDefinitionInEditor(
@@ -834,7 +1109,7 @@ internal sealed class CommanderBuildingPlacementService
         return yawDegrees < 0f ? yawDegrees + 360f : yawDegrees;
     }
 
-    private static string FormatCostMillions(float value)
+    internal static string FormatCostMillions(float value)
     {
         return "$" + value.ToString("0.##") + "m";
     }
@@ -871,7 +1146,8 @@ internal sealed class CommanderBuildingPlacementService
                 return;
             }
 
-            Vector3 localPosition = target.ToLocalPosition() + ammoDumpDefinition.spawnOffset;
+            Vector3 selectedUnitOffset = SelectedDefinition?.SpawnOffset ?? Vector3.zero;
+            Vector3 localPosition = target.ToLocalPosition() + ammoDumpDefinition.spawnOffset + selectedUnitOffset;
             previewAmmoDump = spawner.SpawnFromUnitDefinitionInEditor(
                 ammoDumpDefinition,
                 localPosition.ToGlobalPosition(),
@@ -930,6 +1206,7 @@ internal sealed class CommanderBuildingPlacementService
         internal bool timerStarted;
         internal float startedAt;
         internal float completeAt;
+        internal float createdAt;
         internal Unit? previewAmmoDump;
 
         internal QueuedPlacement(
@@ -948,6 +1225,7 @@ internal sealed class CommanderBuildingPlacementService
             this.rotation = rotation;
             this.startedAt = 0f;
             this.completeAt = float.PositiveInfinity;
+            this.createdAt = Time.unscaledTime;
             this.timerStarted = false;
         }
     }
@@ -972,13 +1250,17 @@ internal sealed class CommanderBuildingPlacementService
         internal readonly GlobalPosition target;
         internal readonly float remainingSeconds;
         internal readonly float jackknifeRadius;
+        internal readonly bool isShip;
+        internal readonly bool isVehicle;
 
-        internal PendingPlacementStatus(string name, GlobalPosition target, float remainingSeconds, float jackknifeRadius)
+        internal PendingPlacementStatus(string name, GlobalPosition target, float remainingSeconds, float jackknifeRadius, bool isShip = false, bool isVehicle = false)
         {
             this.name = name;
             this.target = target;
             this.remainingSeconds = remainingSeconds;
             this.jackknifeRadius = jackknifeRadius;
+            this.isShip = isShip;
+            this.isVehicle = isVehicle;
         }
     }
 
@@ -1000,33 +1282,56 @@ internal sealed class PlaceableDefinition
 {
     internal readonly BuildingDefinition? BuildingDefinition;
     internal readonly ShipDefinition? ShipDefinition;
+    internal readonly VehicleDefinition? VehicleDefinition;
     internal readonly bool IsShip;
+    internal readonly bool IsVehicle;
     internal readonly string UnitName;
     internal readonly float Value;
     internal readonly GameObject? UnitPrefab;
     internal readonly Vector3 SpawnOffset;
+    internal BuildCategory Category { get; set; }
 
     internal PlaceableDefinition(BuildingDefinition definition)
     {
         BuildingDefinition = definition;
         ShipDefinition = null;
+        VehicleDefinition = null;
         IsShip = false;
+        IsVehicle = false;
         UnitName = definition.unitName;
         Value = Mathf.Max(definition.value, 5f);
         UnitPrefab = definition.unitPrefab;
         SpawnOffset = definition.spawnOffset;
+        Category = BuildCategory.Structures;
     }
 
     internal PlaceableDefinition(ShipDefinition definition)
     {
         BuildingDefinition = null;
         ShipDefinition = definition;
+        VehicleDefinition = null;
         IsShip = true;
+        IsVehicle = false;
         UnitName = definition.unitName;
         Value = definition.value;
         UnitPrefab = definition.unitPrefab;
-        // Add vertical offset for ships so they don't clip into terrain
-        float shipVerticalOffset = Mathf.Max(10f, definition.height * 0.5f);
+        float shipVerticalOffset = Mathf.Max(0.5f, definition.height * 0.05f);
         SpawnOffset = new Vector3(0f, shipVerticalOffset, 0f);
+        Category = BuildCategory.Naval;
+    }
+
+    internal PlaceableDefinition(VehicleDefinition definition)
+    {
+        BuildingDefinition = null;
+        ShipDefinition = null;
+        VehicleDefinition = definition;
+        IsShip = false;
+        IsVehicle = true;
+        UnitName = definition.unitName;
+        Value = definition.value;
+        UnitPrefab = definition.unitPrefab;
+        float vehicleVerticalOffset = Mathf.Max(2f, definition.height * 0.15f);
+        SpawnOffset = new Vector3(0f, vehicleVerticalOffset, 0f);
+        Category = BuildCategory.Vehicles;
     }
 }

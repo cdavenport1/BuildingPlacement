@@ -2,6 +2,6 @@ namespace NuclearOptionCommander
 {
 internal static partial class PluginInfo
 {
-public const string Version = "1.0.14";
+public const string Version = "1.0.18";
 }
 }

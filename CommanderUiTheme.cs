@@ -45,6 +45,7 @@ internal static class CommanderUiTheme
         Label = new GUIStyle(GUI.skin.label)
         {
             fontSize = 13,
+            fontStyle = FontStyle.Bold,
             normal = { textColor = new Color(0.9f, 0.94f, 0.93f) },
             wordWrap = true,
             alignment = TextAnchor.MiddleLeft
@@ -52,6 +53,7 @@ internal static class CommanderUiTheme
         MutedLabel = new GUIStyle(Label)
         {
             fontSize = 12,
+            fontStyle = FontStyle.Bold,
             normal = { textColor = new Color(0.62f, 0.7f, 0.7f) }
         };
         Header = new GUIStyle(Label)
@@ -86,6 +88,7 @@ internal static class CommanderUiTheme
             border = new RectOffset(0, 0, 0, 0),
             padding = new RectOffset(10, 10, 6, 6),
             fontSize = 11,
+            fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter,
             wordWrap = true
         };
@@ -96,7 +99,8 @@ internal static class CommanderUiTheme
         };
         DangerButton = new GUIStyle(Button)
         {
-            normal = { background = warningTexture, textColor = Color.white }
+            normal = { background = warningTexture, textColor = Color.white },
+            fontStyle = FontStyle.Bold
         };
         SelectedButton = new GUIStyle(Button)
         {

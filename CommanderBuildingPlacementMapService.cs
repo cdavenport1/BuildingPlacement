@@ -50,12 +50,8 @@ internal sealed class CommanderBuildingPlacementMapService
 
     internal void Close()
     {
-        // Forcefully hide the MFD instead of trying to restore it
-        GameObject? virtualMfd = SceneSingleton<MapOptions>.i?.screen?.virtualMFD?.gameObject;
-        if (virtualMfd != null && virtualMfd.activeSelf)
-        {
-            virtualMfd.SetActive(false);
-        }
+        // Restore the MFD to its previous state
+        RestoreVirtualMfd();
         
         // Minimize the game map
         DynamicMap? dynamicMap = SceneSingleton<DynamicMap>.i;
