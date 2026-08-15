@@ -177,7 +177,3 @@ See LICENSE file in project root.
 ## Version
 
 Current version: **1.0.0** (last updated August 15, 2026)
-
----
-
-For bug reports or feature suggestions, refer to the project repository or contact the developer.
