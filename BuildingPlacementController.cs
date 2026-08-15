@@ -4,7 +4,7 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
 
-namespace NuclearOptionCommander;
+namespace NuclearOptionBuilder;
 
 internal sealed class BuildingPlacementController : MonoBehaviour
 {
@@ -14,10 +14,10 @@ internal sealed class BuildingPlacementController : MonoBehaviour
     private Mesh? unitCubeMesh;
     private Mesh? orientationArrowMesh;
     private readonly Dictionary<int, Bounds> previewBoundsByPrefab = new();
-    private CommanderBuildingPlacementService? service;
-    private CommanderBuildingPlacementUi? ui;
-    private CommanderCameraFollowService? cameraFollowService;
-    private CommanderBuildingPlacementMapService? mapService;
+    private BuilderBuildingPlacementService? service;
+    private BuilderBuildingPlacementUi? ui;
+    private BuilderCameraFollowService? cameraFollowService;
+    private BuilderBuildingPlacementMapService? mapService;
     private Rect launcherRect;
     private bool launcherInitialized;
     private bool gameInProgress;
@@ -27,11 +27,11 @@ internal sealed class BuildingPlacementController : MonoBehaviour
 
     private void Awake()
     {
-        CommanderUiScale.ApplyResolutionPreset();
-        service = new CommanderBuildingPlacementService();
-        cameraFollowService = new CommanderCameraFollowService();
-        mapService = new CommanderBuildingPlacementMapService(cameraFollowService);
-        ui = new CommanderBuildingPlacementUi(service, ExitBuildMode);
+        BuilderUiScale.ApplyResolutionPreset();
+        service = new BuilderBuildingPlacementService();
+        cameraFollowService = new BuilderCameraFollowService();
+        mapService = new BuilderBuildingPlacementMapService(cameraFollowService);
+        ui = new BuilderBuildingPlacementUi(service, ExitBuildMode);
         
         gameInProgress = IsGameInProgress();
         if (gameInProgress)
@@ -43,7 +43,7 @@ internal sealed class BuildingPlacementController : MonoBehaviour
 
     private void Update()
     {
-        CommanderUiScale.RefreshResolutionPreset();
+        BuilderUiScale.RefreshResolutionPreset();
         SyncLauncherVisibility();
 
         bool nowInProgress = IsGameInProgress();
@@ -95,14 +95,14 @@ internal sealed class BuildingPlacementController : MonoBehaviour
             return;
         }
 
-        Matrix4x4 previousMatrix = CommanderUiScale.Begin();
+        Matrix4x4 previousMatrix = BuilderUiScale.Begin();
 
-        CommanderUiTheme.Ensure();
+        BuilderUiTheme.Ensure();
         if (ShouldShowLauncher())
         {
             EnsureLauncherPosition();
 
-            if (GUI.Button(launcherRect, GetLauncherLabel(), CommanderUiTheme.PrimaryButton))
+            if (GUI.Button(launcherRect, GetLauncherLabel(), BuilderUiTheme.PrimaryButton))
             {
                 if (ui?.Visible == true)
                 {
@@ -144,7 +144,7 @@ internal sealed class BuildingPlacementController : MonoBehaviour
             mapService?.DrawControls();
         }
 
-        CommanderUiScale.End(previousMatrix);
+        BuilderUiScale.End(previousMatrix);
     }
 
     private void OnRenderObject()
@@ -219,7 +219,7 @@ internal sealed class BuildingPlacementController : MonoBehaviour
             return;
         }
 
-        if (CommanderShortcutInput.IsDown(CommanderSettings.PrimaryAction))
+        if (BuilderShortcutInput.IsDown(BuilderSettings.PrimaryAction))
         {
             service?.TrySetPlacementFromWorld(Input.mousePosition);
         }
@@ -238,13 +238,13 @@ internal sealed class BuildingPlacementController : MonoBehaviour
             out bool showingOrientationPreview);
 
         // Position floating panel offset from cursor (right/below)
-        Vector2 guiPoint = CommanderUiScale.ScreenToGui(Input.mousePosition);
+        Vector2 guiPoint = BuilderUiScale.ScreenToGui(Input.mousePosition);
         guiPoint = new Vector2(guiPoint.x + 20f, guiPoint.y + 20f);
         
-        GUIStyle panelStyle = CommanderUiTheme.Panel;
-        GUIStyle labelStyle = CommanderUiTheme.Label;
-        GUIStyle headerStyle = CommanderUiTheme.Header;
-        GUIStyle mutedStyle = CommanderUiTheme.MutedLabel;
+        GUIStyle panelStyle = BuilderUiTheme.Panel;
+        GUIStyle labelStyle = BuilderUiTheme.Label;
+        GUIStyle headerStyle = BuilderUiTheme.Header;
+        GUIStyle mutedStyle = BuilderUiTheme.MutedLabel;
 
         // Get text content
         string buildingName = service.PreviewLabel;
@@ -281,13 +281,13 @@ internal sealed class BuildingPlacementController : MonoBehaviour
 
     private void DrawFloatingPanel(Rect rect)
     {
-        GUIStyle panelStyle = CommanderUiTheme.Panel;
+        GUIStyle panelStyle = BuilderUiTheme.Panel;
         
         // Semi-transparent background
         GUI.Box(rect, string.Empty, panelStyle);
         
         // Subtle border
-        CommanderUiTheme.DrawSubtleBorder(rect, 1f);
+        BuilderUiTheme.DrawSubtleBorder(rect, 1f);
         
         // Subtle glow effect
         GUI.color = new Color(0.34f, 0.78f, 0.75f, 0.15f);
@@ -297,8 +297,8 @@ internal sealed class BuildingPlacementController : MonoBehaviour
 
     private void DrawHeadingWithArrow(Rect rect, string headingText, float yawDegrees, bool showingOrientationPreview)
     {
-        GUIStyle labelStyle = CommanderUiTheme.Label;
-        GUIStyle panelStyle = CommanderUiTheme.Panel;
+        GUIStyle labelStyle = BuilderUiTheme.Label;
+        GUIStyle panelStyle = BuilderUiTheme.Panel;
         
         // Larger arrow box on right side - 64x64 with minimal padding
         float arrowSize = 64f;
@@ -306,7 +306,7 @@ internal sealed class BuildingPlacementController : MonoBehaviour
         
         // Draw box around arrow
         GUI.Box(arrowBoxRect, string.Empty, panelStyle);
-        CommanderUiTheme.DrawSubtleBorder(arrowBoxRect, 1f);
+        BuilderUiTheme.DrawSubtleBorder(arrowBoxRect, 1f);
         
         // Draw arrow inside box - centered with minimal padding to prevent clipping
         Rect arrowRect = new(arrowBoxRect.x + 4f, arrowBoxRect.y + 4f, arrowSize - 8f, arrowSize - 8f);
@@ -390,13 +390,13 @@ internal sealed class BuildingPlacementController : MonoBehaviour
     }
 
     private void DrawOrientationPreview(
-        CommanderBuildingPlacementService placementService,
+        BuilderBuildingPlacementService placementService,
         out float yawDegrees,
         out bool showingOrientationPreview)
     {
         yawDegrees = 0f;
         showingOrientationPreview = false;
-        if (!placementService.TryGetPlacementOrientationPreview(out CommanderBuildingPlacementService.PlacementOrientationPreview preview)
+        if (!placementService.TryGetPlacementOrientationPreview(out BuilderBuildingPlacementService.PlacementOrientationPreview preview)
             || !preview.hasDirection)
         {
             return;
@@ -780,7 +780,7 @@ internal sealed class BuildingPlacementController : MonoBehaviour
             return;
         }
 
-        CommanderBuildingPlacementService.PendingPlacementStatus[] pending = service.GetPendingPlacementStatuses();
+        BuilderBuildingPlacementService.PendingPlacementStatus[] pending = service.GetPendingPlacementStatuses();
         if (pending.Length == 0)
         {
             return;
@@ -792,7 +792,7 @@ internal sealed class BuildingPlacementController : MonoBehaviour
             return;
         }
 
-        GUIStyle style = CommanderUiTheme.Panel;
+        GUIStyle style = BuilderUiTheme.Panel;
         for (int i = 0; i < pending.Length; i++)
         {
             Vector3 screenPoint = camera.WorldToScreenPoint(pending[i].target.ToLocalPosition());
@@ -801,7 +801,7 @@ internal sealed class BuildingPlacementController : MonoBehaviour
                 continue;
             }
 
-            Vector2 guiPoint = CommanderUiScale.ScreenToGui(new Vector2(screenPoint.x, screenPoint.y));
+            Vector2 guiPoint = BuilderUiScale.ScreenToGui(new Vector2(screenPoint.x, screenPoint.y));
             string countdown = FormatCountdown(pending[i].remainingSeconds);
             string depotType = pending[i].isShip ? "Large Factory" : pending[i].isVehicle ? "Vehicle Depot" : "Jackknife";
             string text = pending[i].remainingSeconds < 0f
@@ -811,7 +811,7 @@ internal sealed class BuildingPlacementController : MonoBehaviour
             float height = pending[i].remainingSeconds < 0f ? 60f : 48f;
             Rect marker = new(guiPoint.x + 12f, guiPoint.y - (pending[i].remainingSeconds < 0f ? 72f : 52f), width, height);
             GUI.Box(marker, text, style);
-            CommanderUiTheme.DrawSubtleBorder(marker, 1f);
+            BuilderUiTheme.DrawSubtleBorder(marker, 1f);
         }
     }
 
@@ -830,7 +830,7 @@ internal sealed class BuildingPlacementController : MonoBehaviour
             return;
         }
 
-        float centerY = CommanderUiScale.Height * 0.5f;
+        float centerY = BuilderUiScale.Height * 0.5f;
         launcherRect = new Rect(10f, Mathf.Max(10f, centerY + 48f), 52f, 84f);
         launcherInitialized = true;
     }

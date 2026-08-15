@@ -1,6 +1,6 @@
-namespace NuclearOptionCommander;
+namespace NuclearOptionBuilder;
 
-internal sealed class CommanderPlacementCursorState
+internal sealed class BuilderPlacementCursorState
 {
     private bool active;
     private bool previousMapFlag;

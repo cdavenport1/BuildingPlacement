@@ -1,8 +1,8 @@
 using Rewired;
 
-namespace NuclearOptionCommander;
+namespace NuclearOptionBuilder;
 
-internal static class CommanderGameInput
+internal static class BuilderGameInput
 {
     internal static bool CancelDown => GetButtonDown("Cancel");
 
@@ -17,3 +17,4 @@ internal static class CommanderGameInput
         return player != null && player.GetButtonDown(action);
     }
 }
+

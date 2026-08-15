@@ -1,8 +1,8 @@
 using UnityEngine;
 
-namespace NuclearOptionCommander;
+namespace NuclearOptionBuilder;
 
-internal static class CommanderUiTheme
+internal static class BuilderUiTheme
 {
     private static bool initialized;
     private static Texture2D? panelTexture;
@@ -117,10 +117,10 @@ internal static class CommanderUiTheme
 
     internal static Rect ClampWindow(Rect rect, float margin = 12f)
     {
-        rect.width = Mathf.Min(rect.width, Mathf.Max(160f, CommanderUiScale.Width - margin * 2f));
-        rect.height = Mathf.Min(rect.height, Mathf.Max(120f, CommanderUiScale.Height - margin * 2f));
-        rect.x = Mathf.Clamp(rect.x, margin, Mathf.Max(margin, CommanderUiScale.Width - rect.width - margin));
-        rect.y = Mathf.Clamp(rect.y, margin, Mathf.Max(margin, CommanderUiScale.Height - rect.height - margin));
+        rect.width = Mathf.Min(rect.width, Mathf.Max(160f, BuilderUiScale.Width - margin * 2f));
+        rect.height = Mathf.Min(rect.height, Mathf.Max(120f, BuilderUiScale.Height - margin * 2f));
+        rect.x = Mathf.Clamp(rect.x, margin, Mathf.Max(margin, BuilderUiScale.Width - rect.width - margin));
+        rect.y = Mathf.Clamp(rect.y, margin, Mathf.Max(margin, BuilderUiScale.Height - rect.height - margin));
         return rect;
     }
 
@@ -176,3 +176,4 @@ internal static class CommanderUiTheme
         return texture;
     }
 }
+

@@ -2,9 +2,9 @@ using HarmonyLib;
 using NuclearOption.Networking;
 using UnityEngine;
 
-namespace NuclearOptionCommander;
+namespace NuclearOptionBuilder;
 
-internal static class CommanderGameAccess
+internal static class BuilderGameAccess
 {
     internal static FactionHQ? GetLocalHq()
     {
@@ -30,3 +30,4 @@ internal static class CommanderGameAccess
         return true;
     }
 }
+

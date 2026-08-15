@@ -2,9 +2,9 @@ using BepInEx.Configuration;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace NuclearOptionCommander;
+namespace NuclearOptionBuilder;
 
-internal static class CommanderSettings
+internal static class BuilderSettings
 {
     private static ConfigFile? config;
     private static readonly Dictionary<string, ConfigEntryBase> entries = new();
@@ -105,3 +105,4 @@ internal static class CommanderSettings
         return created;
     }
 }
+

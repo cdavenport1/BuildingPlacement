@@ -3,9 +3,9 @@ using System.Reflection;
 using UnityEngine;
 using HarmonyLib;
 
-namespace NuclearOptionCommander;
+namespace NuclearOptionBuilder;
 
-internal sealed class CommanderBuildingPlacementMapService
+internal sealed class BuilderBuildingPlacementMapService
 {
     private const float TacticalMapSize = 675f;
     private const float TacticalMapMargin = 12f;
@@ -13,9 +13,9 @@ internal sealed class CommanderBuildingPlacementMapService
 
     private static readonly MethodInfo? JumpCameraToMethod = AccessTools.Method(typeof(DynamicMap), "JumpCameraTo");
 
-    internal static CommanderBuildingPlacementMapService? Instance { get; private set; }
+    internal static BuilderBuildingPlacementMapService? Instance { get; private set; }
 
-    private readonly CommanderCameraFollowService cameraFollowService;
+    private readonly BuilderCameraFollowService cameraFollowService;
     private DynamicMap? activeMap;
     private bool positionInitialized;
     private bool helpVisible;
@@ -26,7 +26,7 @@ internal sealed class CommanderBuildingPlacementMapService
     private GameObject? hiddenVirtualMfd;
     private bool virtualMfdWasActive;
 
-    internal CommanderBuildingPlacementMapService(CommanderCameraFollowService cameraFollowService)
+    internal BuilderBuildingPlacementMapService(BuilderCameraFollowService cameraFollowService)
     {
         this.cameraFollowService = cameraFollowService;
         Instance = this;
@@ -73,9 +73,9 @@ internal sealed class CommanderBuildingPlacementMapService
 
         mapWindowRect.width = TacticalMapSize;
         mapWindowRect.height = TacticalMapSize + HeaderHeight;
-        mapWindowRect = CommanderUiTheme.ClampWindow(mapWindowRect, TacticalMapMargin);
+        mapWindowRect = BuilderUiTheme.ClampWindow(mapWindowRect, TacticalMapMargin);
         
-        if (!Mathf.Approximately(lastAppliedUiScale, CommanderUiScale.Scale)
+        if (!Mathf.Approximately(lastAppliedUiScale, BuilderUiScale.Scale)
             || lastAppliedMapPosition != mapWindowRect.position)
         {
             ApplyLayout();
@@ -86,7 +86,7 @@ internal sealed class CommanderBuildingPlacementMapService
 
     internal void DrawControls()
     {
-        CommanderUiTheme.Ensure();
+        BuilderUiTheme.Ensure();
         
         // Don't render if NOCommander mode is active
         if (IsNoCommanderActive())
@@ -96,54 +96,54 @@ internal sealed class CommanderBuildingPlacementMapService
             return;
         
         Rect header = new(mapWindowRect.x, mapWindowRect.y, mapWindowRect.width, HeaderHeight);
-        GUI.Box(header, string.Empty, CommanderUiTheme.Panel);
-        GUI.Label(new Rect(header.x + 10f, header.y + 3f, 42f, 24f), "MAP", CommanderUiTheme.Header);
+        GUI.Box(header, string.Empty, BuilderUiTheme.Panel);
+        GUI.Label(new Rect(header.x + 10f, header.y + 3f, 42f, 24f), "MAP", BuilderUiTheme.Header);
 
         bool oldEnabled = GUI.enabled;
         Rect cameraGroup = new(header.xMax - 380f, header.y + 2f, 312f, 26f);
-        CommanderUiTheme.DrawSubtleBorder(cameraGroup, 1f);
+        BuilderUiTheme.DrawSubtleBorder(cameraGroup, 1f);
         
-        GUI.Label(new Rect(cameraGroup.x + 4f, cameraGroup.y + 1f, 38f, 24f), "CAM", CommanderUiTheme.MutedLabel);
+        GUI.Label(new Rect(cameraGroup.x + 4f, cameraGroup.y + 1f, 38f, 24f), "CAM", BuilderUiTheme.MutedLabel);
         GUI.enabled = oldEnabled && cameraFollowService.CanFollow;
         
         if (GUI.Button(new Rect(cameraGroup.x + 42f, cameraGroup.y + 2f, 80f, 22f),
             cameraFollowService.Enabled ? "FOLLOW POS" : "FOLLOW",
-            cameraFollowService.Enabled ? CommanderUiTheme.SelectedButton : CommanderUiTheme.Button))
+            cameraFollowService.Enabled ? BuilderUiTheme.SelectedButton : BuilderUiTheme.Button))
         {
             cameraFollowService.Toggle();
         }
         
-        if (GUI.Button(new Rect(cameraGroup.x + 126f, cameraGroup.y + 2f, 80f, 22f), "CENTER", CommanderUiTheme.Button))
+        if (GUI.Button(new Rect(cameraGroup.x + 126f, cameraGroup.y + 2f, 80f, 22f), "CENTER", BuilderUiTheme.Button))
         {
             cameraFollowService.CenterOnSelection();
         }
         
         if (GUI.Button(new Rect(cameraGroup.x + 210f, cameraGroup.y + 2f, 80f, 22f),
             cameraFollowService.PovMode ? "POV ON" : "POV",
-            cameraFollowService.PovMode ? CommanderUiTheme.SelectedButton : CommanderUiTheme.Button))
+            cameraFollowService.PovMode ? BuilderUiTheme.SelectedButton : BuilderUiTheme.Button))
         {
             cameraFollowService.TogglePov();
         }
         
         GUI.enabled = oldEnabled;
         
-        if (GUI.Button(new Rect(header.xMax - 60f, header.y + 3f, 26f, 24f), "?", CommanderUiTheme.HelpButton))
+        if (GUI.Button(new Rect(header.xMax - 60f, header.y + 3f, 26f, 24f), "?", BuilderUiTheme.HelpButton))
         {
             helpVisible = !helpVisible;
         }
         
-        if (GUI.Button(new Rect(header.xMax - 30f, header.y + 3f, 26f, 24f), "X", CommanderUiTheme.DangerButton))
+        if (GUI.Button(new Rect(header.xMax - 30f, header.y + 3f, 26f, 24f), "X", BuilderUiTheme.DangerButton))
         {
             Close();
             return;
         }
 
         Rect mapRect = GetMapGuiRect();
-        CommanderUiTheme.DrawSubtleBorder(new Rect(mapRect.x - 2f, mapRect.y - 2f, mapRect.width + 4f, mapRect.height + 4f), 1f);
+        BuilderUiTheme.DrawSubtleBorder(new Rect(mapRect.x - 2f, mapRect.y - 2f, mapRect.width + 4f, mapRect.height + 4f), 1f);
         
         if (helpVisible)
         {
-            CommanderUiTheme.DrawHelpOverlay(
+            BuilderUiTheme.DrawHelpOverlay(
                 new Rect(mapRect.x + 10f, mapRect.y + 10f, mapRect.width - 20f, 82f),
                 "LMB selects map icons; RMB issues Basegame orders. FOLLOW tracks position, CENTER jumps once, and POV provides a movable view. Map navigation features.");
         }
@@ -151,7 +151,7 @@ internal sealed class CommanderBuildingPlacementMapService
 
     internal bool ContainsScreenPoint(Vector2 screenPoint)
     {
-        Vector2 guiPoint = CommanderUiScale.ScreenToGui(screenPoint);
+        Vector2 guiPoint = BuilderUiScale.ScreenToGui(screenPoint);
         return IsActive && mapWindowRect.Contains(guiPoint);
     }
 
@@ -169,7 +169,7 @@ internal sealed class CommanderBuildingPlacementMapService
         if (positionInitialized) return;
 
         mapWindowRect = new Rect(
-            CommanderUiScale.Width - TacticalMapMargin - TacticalMapSize,
+            BuilderUiScale.Width - TacticalMapMargin - TacticalMapSize,
             TacticalMapMargin,
             TacticalMapSize,
             TacticalMapSize + HeaderHeight);
@@ -197,13 +197,13 @@ internal sealed class CommanderBuildingPlacementMapService
         Vector2 bottomLeft = RectTransformUtility.WorldToScreenPoint(null, mapCorners[0]);
         Vector2 bottomRight = RectTransformUtility.WorldToScreenPoint(null, mapCorners[3]);
         float sourcePixelSize = Mathf.Max(Vector2.Distance(bottomLeft, bottomRight), 1f);
-        float scale = TacticalMapSize * CommanderUiScale.Scale / sourcePixelSize;
+        float scale = TacticalMapSize * BuilderUiScale.Scale / sourcePixelSize;
         rectTransform.localScale = Vector3.one * scale;
         
-        Vector2 screenCenter = CommanderUiScale.GuiToScreen(mapRect.center);
+        Vector2 screenCenter = BuilderUiScale.GuiToScreen(mapRect.center);
         rectTransform.position = new Vector3(screenCenter.x, screenCenter.y, rectTransform.position.z);
         
-        lastAppliedUiScale = CommanderUiScale.Scale;
+        lastAppliedUiScale = BuilderUiScale.Scale;
         lastAppliedMapPosition = mapWindowRect.position;
     }
 
@@ -212,7 +212,7 @@ internal sealed class CommanderBuildingPlacementMapService
         GameplayUI? gameplayUi = SceneSingleton<GameplayUI>.i;
         gameplayUi?.HideSelectAirbase();
         gameplayUi?.HideSpectatorPanel();
-        CommanderBuildingPlacementMapService.Instance?.HideVirtualMfd();
+        BuilderBuildingPlacementMapService.Instance?.HideVirtualMfd();
     }
 
     private void HideVirtualMfd()
@@ -288,3 +288,5 @@ internal sealed class CommanderBuildingPlacementMapService
         }
     }
 }
+
+

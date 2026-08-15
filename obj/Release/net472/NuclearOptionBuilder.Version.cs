@@ -23,8 +23,8 @@ internal static partial class ThisAssembly {
     internal const string AssemblyConfiguration = "Release";
     internal const string AssemblyFileVersion = "1.0.21.25531";
     internal const string AssemblyInformationalVersion = "1.0.21+63bb1398c7";
-    internal const string AssemblyName = "BuildingPlacement";
-    internal const string AssemblyTitle = "BuildingPlacement";
+    internal const string AssemblyName = "NuclearOptionBuilder";
+    internal const string AssemblyTitle = "NuclearOptionBuilder";
     internal const string AssemblyVersion = "1.0.0.0";
     internal static readonly global::System.DateTime GitCommitAuthorDate = new global::System.DateTime(639224315590000000L, global::System.DateTimeKind.Utc);
     internal static readonly global::System.DateTime GitCommitDate = new global::System.DateTime(639224315590000000L, global::System.DateTimeKind.Utc);

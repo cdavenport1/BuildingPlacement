@@ -1,8 +1,8 @@
 using UnityEngine;
 
-namespace NuclearOptionCommander;
+namespace NuclearOptionBuilder;
 
-internal static class CommanderScheduler
+internal static class BuilderScheduler
 {
     internal static float Stagger(string taskName, float interval, float maximumDelay = -1f)
     {
@@ -28,3 +28,4 @@ internal static class CommanderScheduler
         return true;
     }
 }
+

@@ -1,14 +1,14 @@
 using UnityEngine;
 
-namespace NuclearOptionCommander;
+namespace NuclearOptionBuilder;
 
-internal static class CommanderUiScale
+internal static class BuilderUiScale
 {
     private const float BaselineScale = 1.5f;
     private static int lastScreenWidth;
     private static int lastScreenHeight;
 
-    internal static float DisplayScale => CommanderSettings.UiScale;
+    internal static float DisplayScale => BuilderSettings.UiScale;
     internal static float Scale => DisplayScale / BaselineScale;
     internal static float Width => Screen.width / Scale;
     internal static float Height => Screen.height / Scale;
@@ -17,7 +17,7 @@ internal static class CommanderUiScale
     {
         lastScreenWidth = Screen.width;
         lastScreenHeight = Screen.height;
-        CommanderSettings.UiScale = Screen.height <= 1200 ? 1f : Screen.height <= 1600 ? 1.25f : 1.5f;
+        BuilderSettings.UiScale = Screen.height <= 1200 ? 1f : Screen.height <= 1600 ? 1.25f : 1.5f;
     }
 
     internal static void RefreshResolutionPreset()
@@ -50,3 +50,4 @@ internal static class CommanderUiScale
         return new Vector2(guiPoint.x * Scale, Screen.height - guiPoint.y * Scale);
     }
 }
+

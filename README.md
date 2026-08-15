@@ -160,10 +160,10 @@ Output: `bin\Release\net472\BuildingPlacement.dll`
 
 ### Project Structure
 
-- `CommanderBuildingPlacementService.cs` - Core placement logic and facility detection
-- `CommanderBuildingPlacementUi.cs` - Main UI window rendering
-- `CommanderBuildingPlacementController.cs` - Update loop and event handling
-- `CommanderBuildingPlacementMapService.cs` - Tactical map integration
+- `BuilderBuildingPlacementService.cs` - Core placement logic and facility detection
+- `BuilderBuildingPlacementUi.cs` - Main UI window rendering
+- `BuildingPlacementController.cs` - Update loop and event handling
+- `BuilderBuildingPlacementMapService.cs` - Tactical map integration
 - Support files for camera, input, UI theming, and settings
 
 ## Credits

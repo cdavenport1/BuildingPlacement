@@ -4,7 +4,7 @@ using System.Linq;
 using NuclearOption.Networking;
 using UnityEngine;
 
-namespace NuclearOptionCommander;
+namespace NuclearOptionBuilder;
 
 internal enum BuildCategory
 {
@@ -13,7 +13,7 @@ internal enum BuildCategory
     Vehicles
 }
 
-internal sealed class CommanderBuildingPlacementService
+internal sealed class BuilderBuildingPlacementService
 {
     private const float MinimumBuildingCostMillions = 5f;
     private const float BuildDelayStepMinutes = 5f;
@@ -29,8 +29,8 @@ internal sealed class CommanderBuildingPlacementService
     private const float ShipLargeFactorySearchTimeoutSeconds = 5f;  // Ship placements timeout after 5 seconds if no Large Factory found
     private const float VehicleDepotSearchTimeoutSeconds = 5f;  // Vehicle placements timeout after 5 seconds if no depot found
 
-    private readonly CommanderMapClickTracker placementClickTracker = new();
-    private readonly CommanderPlacementCursorState placementCursorState = new();
+    private readonly BuilderMapClickTracker placementClickTracker = new();
+    private readonly BuilderPlacementCursorState placementCursorState = new();
     private readonly List<PlaceableDefinition> placeableDefinitions = new();
     private readonly List<QueuedPlacement> pendingPlacements = new();
     private readonly Dictionary<BuildCategory, bool> categoryExpandedState = new()
@@ -93,9 +93,9 @@ internal sealed class CommanderBuildingPlacementService
         }
     }
 
-    internal string OrientationOffsetLabel => $"ORIENTATION OFFSET {Mathf.RoundToInt(NormalizeYawDegrees(CommanderSettings.PlacementOrientationOffsetDegrees)):000}";
+    internal string OrientationOffsetLabel => $"ORIENTATION OFFSET {Mathf.RoundToInt(NormalizeYawDegrees(BuilderSettings.PlacementOrientationOffsetDegrees)):000}";
 
-    internal string OrientationScrollLabel => CommanderSettings.PlacementReverseScrollDirection
+    internal string OrientationScrollLabel => BuilderSettings.PlacementReverseScrollDirection
         ? "SCROLL DIRECTION REVERSED"
         : "SCROLL DIRECTION NORMAL";
 
@@ -180,7 +180,7 @@ internal sealed class CommanderBuildingPlacementService
     {
         EnsurePlacementCalibrationDefaults();
         RefreshBuildingDefinitions();
-        nextRefreshAt = CommanderScheduler.Stagger("building-placement", RefreshIntervalSeconds, 0.4f);
+        nextRefreshAt = BuilderScheduler.Stagger("building-placement", RefreshIntervalSeconds, 0.4f);
     }
 
     internal void Deactivate()
@@ -214,7 +214,7 @@ internal sealed class CommanderBuildingPlacementService
 
         placementCursorState.Tick();
 
-        if (CommanderGameInput.CancelDown)
+        if (BuilderGameInput.CancelDown)
         {
             CancelPlacementSelection(showStatus: true);
             return;
@@ -227,7 +227,7 @@ internal sealed class CommanderBuildingPlacementService
             float scrollDelta = Input.mouseScrollDelta.y;
             if (Mathf.Abs(scrollDelta) > Mathf.Epsilon)
             {
-                float signedScrollDelta = CommanderSettings.PlacementReverseScrollDirection ? -scrollDelta : scrollDelta;
+                float signedScrollDelta = BuilderSettings.PlacementReverseScrollDirection ? -scrollDelta : scrollDelta;
                 pendingYawDegrees = NormalizeYawDegrees(pendingYawDegrees + signedScrollDelta * OrientationStepDegrees);
                 UpdatePreviewAmmoDumpRotation();
             }
@@ -250,7 +250,7 @@ internal sealed class CommanderBuildingPlacementService
     {
         ProcessPendingPlacements();
 
-        if (!CommanderScheduler.IsDue(ref nextRefreshAt, RefreshIntervalSeconds))
+        if (!BuilderScheduler.IsDue(ref nextRefreshAt, RefreshIntervalSeconds))
         {
             return;
         }
@@ -267,7 +267,7 @@ internal sealed class CommanderBuildingPlacementService
 
     internal bool CanAffordDefinition(PlaceableDefinition definition)
     {
-        FactionHQ? hq = CommanderGameAccess.GetLocalHq();
+        FactionHQ? hq = BuilderGameAccess.GetLocalHq();
         return hq == null || hq.factionFunds >= definition.Value;
     }
 
@@ -282,24 +282,24 @@ internal sealed class CommanderBuildingPlacementService
 
     internal void AdjustOrientationOffset(float deltaDegrees)
     {
-        CommanderSettings.PlacementOrientationOffsetDegrees = NormalizeYawDegrees(
-            CommanderSettings.PlacementOrientationOffsetDegrees + deltaDegrees);
+        BuilderSettings.PlacementOrientationOffsetDegrees = NormalizeYawDegrees(
+            BuilderSettings.PlacementOrientationOffsetDegrees + deltaDegrees);
     }
 
     internal void SetOrientationOffset(float absoluteDegrees)
     {
-        CommanderSettings.PlacementOrientationOffsetDegrees = NormalizeYawDegrees(absoluteDegrees);
+        BuilderSettings.PlacementOrientationOffsetDegrees = NormalizeYawDegrees(absoluteDegrees);
     }
 
     internal void ToggleOrientationScrollDirection()
     {
-        CommanderSettings.PlacementReverseScrollDirection = !CommanderSettings.PlacementReverseScrollDirection;
+        BuilderSettings.PlacementReverseScrollDirection = !BuilderSettings.PlacementReverseScrollDirection;
     }
 
     internal void ResetOrientationCalibration()
     {
-        CommanderSettings.PlacementOrientationOffsetDegrees = 0f;
-        CommanderSettings.PlacementReverseScrollDirection = false;
+        BuilderSettings.PlacementOrientationOffsetDegrees = 0f;
+        BuilderSettings.PlacementReverseScrollDirection = false;
     }
 
     internal void SelectDefinition(int index)
@@ -372,7 +372,7 @@ internal sealed class CommanderBuildingPlacementService
         }
         
         // For non-ships, require terrain raycast
-        if (!CommanderGameAccess.TryRaycastWorldPosition(screenPosition, out GlobalPosition target))
+        if (!BuilderGameAccess.TryRaycastWorldPosition(screenPosition, out GlobalPosition target))
         {
             SetStatus("No valid terrain position was found.");
             return true;
@@ -484,7 +484,7 @@ internal sealed class CommanderBuildingPlacementService
     private void CompletePlacementSelection(GlobalPosition target, float yawDegrees)
     {
         PlaceableDefinition? definition = SelectedDefinition;
-        FactionHQ? hq = CommanderGameAccess.GetLocalHq();
+        FactionHQ? hq = BuilderGameAccess.GetLocalHq();
         if (definition == null || hq == null)
         {
             DestroyPreviewAmmoDump();
@@ -562,19 +562,19 @@ internal sealed class CommanderBuildingPlacementService
 
     private static void EnsurePlacementCalibrationDefaults()
     {
-        if (CommanderSettings.PlacementCalibrationInitialized)
+        if (BuilderSettings.PlacementCalibrationInitialized)
         {
             return;
         }
 
-        CommanderSettings.PlacementOrientationOffsetDegrees = 0f;
-        CommanderSettings.PlacementReverseScrollDirection = false;
-        CommanderSettings.PlacementCalibrationInitialized = true;
+        BuilderSettings.PlacementOrientationOffsetDegrees = 0f;
+        BuilderSettings.PlacementReverseScrollDirection = false;
+        BuilderSettings.PlacementCalibrationInitialized = true;
     }
 
     private static float GetCalibratedPlacementYawDegrees(float rawYawDegrees)
     {
-        float offset = CommanderSettings.PlacementOrientationOffsetDegrees;
+        float offset = BuilderSettings.PlacementOrientationOffsetDegrees;
         return NormalizeYawDegrees(rawYawDegrees + offset);
     }
 
@@ -596,7 +596,7 @@ internal sealed class CommanderBuildingPlacementService
                 if (factorySearchElapsed > ShipLargeFactorySearchTimeoutSeconds)
                 {
                     // Timeout: refund and remove placement
-                    FactionHQ? hq = CommanderGameAccess.GetLocalHq();
+                    FactionHQ? hq = BuilderGameAccess.GetLocalHq();
                     if (hq != null)
                     {
                         hq.AddFunds(queued.cost);
@@ -615,7 +615,7 @@ internal sealed class CommanderBuildingPlacementService
                 if (depotSearchElapsed > VehicleDepotSearchTimeoutSeconds)
                 {
                     // Timeout: refund and remove placement
-                    FactionHQ? hq = CommanderGameAccess.GetLocalHq();
+                    FactionHQ? hq = BuilderGameAccess.GetLocalHq();
                     if (hq != null)
                     {
                         hq.AddFunds(queued.cost);
@@ -930,7 +930,7 @@ internal sealed class CommanderBuildingPlacementService
     private void TryCompleteQueuedPlacement(QueuedPlacement queued)
     {
         PlaceableDefinition? definition = queued.definition;
-        FactionHQ? hq = CommanderGameAccess.GetLocalHq();
+        FactionHQ? hq = BuilderGameAccess.GetLocalHq();
         Spawner? spawner = NetworkSceneSingleton<Spawner>.i;
         if (definition == null || hq == null || spawner == null)
         {
@@ -1002,14 +1002,14 @@ internal sealed class CommanderBuildingPlacementService
         {
             DestroyQueuedPlacementPreview(queued);
             RefundQueuedPlacement(queued);
-            CommanderPlugin.Log.LogError($"Building/ship placement failed: {exception}");
+            BuilderPlugin.Log.LogError($"Building/ship placement failed: {exception}");
             SetStatus($"{definition.UnitName} placement failed: {exception.Message}. Refunded {FormatCostMillions(queued.cost)}.", warning: true);
         }
     }
 
     private static void RefundQueuedPlacement(QueuedPlacement queued)
     {
-        FactionHQ? hq = CommanderGameAccess.GetLocalHq();
+        FactionHQ? hq = BuilderGameAccess.GetLocalHq();
         hq?.AddFunds(queued.cost);
     }
 
@@ -1034,7 +1034,7 @@ internal sealed class CommanderBuildingPlacementService
             }
             catch (Exception exception)
             {
-                CommanderPlugin.Log.LogWarning($"Failed to destroy queued placement preview: {exception.Message}");
+                BuilderPlugin.Log.LogWarning($"Failed to destroy queued placement preview: {exception.Message}");
             }
             finally
             {
@@ -1139,7 +1139,7 @@ internal sealed class CommanderBuildingPlacementService
                 return;
             }
 
-            FactionHQ? hq = CommanderGameAccess.GetLocalHq();
+            FactionHQ? hq = BuilderGameAccess.GetLocalHq();
             Spawner? spawner = NetworkSceneSingleton<Spawner>.i;
             if (hq == null || spawner == null)
             {
@@ -1157,7 +1157,7 @@ internal sealed class CommanderBuildingPlacementService
         }
         catch (Exception exception)
         {
-            CommanderPlugin.Log.LogWarning($"Failed to spawn preview ammo dump: {exception.Message}");
+            BuilderPlugin.Log.LogWarning($"Failed to spawn preview ammo dump: {exception.Message}");
         }
     }
 
@@ -1171,7 +1171,7 @@ internal sealed class CommanderBuildingPlacementService
             }
             catch (Exception exception)
             {
-                CommanderPlugin.Log.LogWarning($"Failed to destroy preview ammo dump: {exception.Message}");
+                BuilderPlugin.Log.LogWarning($"Failed to destroy preview ammo dump: {exception.Message}");
             }
             finally
             {
@@ -1190,7 +1190,7 @@ internal sealed class CommanderBuildingPlacementService
             }
             catch (Exception exception)
             {
-                CommanderPlugin.Log.LogWarning($"Failed to update preview ammo dump rotation: {exception.Message}");
+                BuilderPlugin.Log.LogWarning($"Failed to update preview ammo dump rotation: {exception.Message}");
             }
         }
     }
@@ -1269,11 +1269,11 @@ internal sealed class CommanderBuildingPlacementService
         statusText = value;
         if (warning)
         {
-            CommanderPlugin.Log.LogWarning(value);
+            BuilderPlugin.Log.LogWarning(value);
         }
         else
         {
-            CommanderPlugin.Log.LogInfo(value);
+            BuilderPlugin.Log.LogInfo(value);
         }
     }
 }
@@ -1335,3 +1335,4 @@ internal sealed class PlaceableDefinition
         Category = BuildCategory.Vehicles;
     }
 }
+

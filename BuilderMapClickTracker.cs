@@ -1,8 +1,8 @@
 using UnityEngine;
 
-namespace NuclearOptionCommander;
+namespace NuclearOptionBuilder;
 
-internal sealed class CommanderMapClickTracker
+internal sealed class BuilderMapClickTracker
 {
     private bool pressed;
 
@@ -10,12 +10,12 @@ internal sealed class CommanderMapClickTracker
     {
         position = default;
 
-        if (!pressed && CommanderShortcutInput.IsHeld(CommanderSettings.PrimaryAction) && dynamicMap.IsCursorInMapRectangle())
+        if (!pressed && BuilderShortcutInput.IsHeld(BuilderSettings.PrimaryAction) && dynamicMap.IsCursorInMapRectangle())
         {
             pressed = true;
         }
 
-        if (!pressed || !Input.GetKeyUp(CommanderSettings.PrimaryAction.MainKey))
+        if (!pressed || !Input.GetKeyUp(BuilderSettings.PrimaryAction.MainKey))
         {
             return false;
         }
@@ -30,3 +30,4 @@ internal sealed class CommanderMapClickTracker
         pressed = false;
     }
 }
+

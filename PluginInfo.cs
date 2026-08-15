@@ -1,4 +1,4 @@
-namespace NuclearOptionCommander;
+namespace NuclearOptionBuilder;
 
 internal static partial class PluginInfo
 {

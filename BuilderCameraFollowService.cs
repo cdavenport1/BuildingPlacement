@@ -1,8 +1,8 @@
 using UnityEngine;
 
-namespace NuclearOptionCommander;
+namespace NuclearOptionBuilder;
 
-internal sealed class CommanderCameraFollowService
+internal sealed class BuilderCameraFollowService
 {
     private const float CameraHeight = 20f;
     private const float CameraPovDistance = 15f;
@@ -49,4 +49,5 @@ internal sealed class CommanderCameraFollowService
         }
     }
 }
+
 

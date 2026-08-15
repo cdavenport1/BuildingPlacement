@@ -3,12 +3,12 @@ using BepInEx.Logging;
 using HarmonyLib;
 using UnityEngine;
 
-namespace NuclearOptionCommander;
+namespace NuclearOptionBuilder;
 
 [BepInPlugin(PluginInfo.Guid, PluginInfo.Name, PluginInfo.Version)]
-public sealed class CommanderPlugin : BaseUnityPlugin
+public sealed class BuilderPlugin : BaseUnityPlugin
 {
-    internal static CommanderPlugin? Instance { get; private set; }
+    internal static BuilderPlugin? Instance { get; private set; }
     internal static ManualLogSource Log => Instance!.Logger;
 
     private Harmony? harmony;
@@ -16,8 +16,8 @@ public sealed class CommanderPlugin : BaseUnityPlugin
     private void Awake()
     {
         Instance = this;
-        CommanderSettings.Initialize(Config);
-        if (!CommanderSettings.ModEnabled)
+        BuilderSettings.Initialize(Config);
+        if (!BuilderSettings.ModEnabled)
         {
             Logger.LogInfo($"{PluginInfo.Name} {PluginInfo.Version} is disabled in configuration.");
             return;
@@ -40,3 +40,4 @@ public sealed class CommanderPlugin : BaseUnityPlugin
         Instance = null;
     }
 }
+

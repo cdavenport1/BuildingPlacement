@@ -4,8 +4,8 @@
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
-    <AssemblyName>BuildingPlacement</AssemblyName>
-    <RootNamespace>NuclearOptionCommander</RootNamespace>
+    <AssemblyName>NuclearOptionBuilder</AssemblyName>
+    <RootNamespace>NuclearOptionBuilder</RootNamespace>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <GeneratedPluginInfoFile>$(BaseIntermediateOutputPath)$(Configuration)\$(TargetFramework)\PluginInfo.Version.g.cs</GeneratedPluginInfoFile>
   </PropertyGroup>
@@ -24,7 +24,7 @@
 
   <Target Name="GeneratePluginVersion" BeforeTargets="BeforeCompile">
     <ItemGroup>
-      <GeneratedPluginInfoLines Include="namespace NuclearOptionCommander" />
+      <GeneratedPluginInfoLines Include="namespace NuclearOptionBuilder" />
       <GeneratedPluginInfoLines Include="{" />
       <GeneratedPluginInfoLines Include="internal static partial class PluginInfo" />
       <GeneratedPluginInfoLines Include="{" />

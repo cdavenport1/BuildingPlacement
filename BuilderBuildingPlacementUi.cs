@@ -1,14 +1,14 @@
 using System;
 using UnityEngine;
 
-namespace NuclearOptionCommander;
+namespace NuclearOptionBuilder;
 
-internal sealed class CommanderBuildingPlacementUi
+internal sealed class BuilderBuildingPlacementUi
 {
     private const int WindowId = 0x434F4D42;
     private const int BuildTimeWindowId = 0x434F4D43;
 
-    private readonly CommanderBuildingPlacementService service;
+    private readonly BuilderBuildingPlacementService service;
     private Action? onExit;
     private bool visible;
     private bool minimized;
@@ -20,7 +20,7 @@ internal sealed class CommanderBuildingPlacementUi
     private Rect buildTimeWindowRect;
     private Vector2 scroll;
 
-internal CommanderBuildingPlacementUi(CommanderBuildingPlacementService service, Action? onExit = null)
+internal BuilderBuildingPlacementUi(BuilderBuildingPlacementService service, Action? onExit = null)
     {
         this.service = service;
         this.onExit = onExit;
@@ -67,30 +67,30 @@ internal CommanderBuildingPlacementUi(CommanderBuildingPlacementService service,
         }
 
         EnsurePosition();
-        windowRect = CommanderUiTheme.ClampWindow(windowRect);
+        windowRect = BuilderUiTheme.ClampWindow(windowRect);
         windowRect = GUI.Window(
             WindowId,
             windowRect,
             DrawWindow,
             "BUILDING PLACEMENT",
-            CommanderUiTheme.Window);
+            BuilderUiTheme.Window);
 
         if (buildTimeControlsVisible)
         {
             EnsureBuildTimeWindowPosition();
-            buildTimeWindowRect = CommanderUiTheme.ClampWindow(buildTimeWindowRect);
+            buildTimeWindowRect = BuilderUiTheme.ClampWindow(buildTimeWindowRect);
             buildTimeWindowRect = GUI.Window(
                 BuildTimeWindowId,
                 buildTimeWindowRect,
                 DrawBuildTimeWindow,
                 "BUILD TIME SETTINGS",
-                CommanderUiTheme.Window);
+                BuilderUiTheme.Window);
         }
     }
 
     internal bool ContainsScreenPoint(Vector2 screenPosition)
     {
-        return visible && windowRect.Contains(CommanderUiScale.ScreenToGui(screenPosition));
+        return visible && windowRect.Contains(BuilderUiScale.ScreenToGui(screenPosition));
     }
 
     internal void ResetPosition()
@@ -128,9 +128,9 @@ internal CommanderBuildingPlacementUi(CommanderBuildingPlacementService service,
             }
         }
         
-        if (CommanderUiTheme.DrawHelpButton(windowRect.width, ref helpVisible))
+        if (BuilderUiTheme.DrawHelpButton(windowRect.width, ref helpVisible))
         {
-            CommanderUiTheme.DrawHelpOverlay(
+            BuilderUiTheme.DrawHelpOverlay(
                 new Rect(20f, windowRect.height - 300f, windowRect.width - 40f, 180f),
                 helpText);
         }
@@ -138,13 +138,13 @@ internal CommanderBuildingPlacementUi(CommanderBuildingPlacementService service,
         if (GUI.Button(
             new Rect(windowRect.width - 34f, 3f, 26f, 22f),
             "X",
-            CommanderUiTheme.DangerButton))
+            BuilderUiTheme.DangerButton))
         {
             Hide();
             return;
         }
 
-        if (GUI.Button(new Rect(windowRect.width - 118f, 3f, 50f, 22f), "DBG", CommanderUiTheme.Button))
+        if (GUI.Button(new Rect(windowRect.width - 118f, 3f, 50f, 22f), "DBG", BuilderUiTheme.Button))
         {
             buildTimeControlsVisible = !buildTimeControlsVisible;
             if (buildTimeControlsVisible)
@@ -157,21 +157,21 @@ internal CommanderBuildingPlacementUi(CommanderBuildingPlacementService service,
         GUI.Label(
             new Rect(12f, y, windowRect.width - 24f, 24f),
             selected != null ? $"SELECTED  {selected.UnitName}" : "NO BUILDING BLUEPRINTS AVAILABLE",
-            CommanderUiTheme.Header);
+            BuilderUiTheme.Header);
         y += 30f;
 
         // Faction Funds Display
-        FactionHQ? hq = CommanderGameAccess.GetLocalHq();
-        string fundsText = hq != null ? $"FACTION FUNDS  {CommanderBuildingPlacementService.FormatCostMillions(hq.factionFunds)}" : "FACTION FUNDS  UNAVAILABLE";
+        FactionHQ? hq = BuilderGameAccess.GetLocalHq();
+        string fundsText = hq != null ? $"FACTION FUNDS  {BuilderBuildingPlacementService.FormatCostMillions(hq.factionFunds)}" : "FACTION FUNDS  UNAVAILABLE";
         GUI.Label(
             new Rect(12f, y, windowRect.width - 24f, 24f),
             fundsText,
-            CommanderUiTheme.Label);
+            BuilderUiTheme.Label);
         y += 32f;
 
         Rect listRect = new(12f, y, windowRect.width - 24f, windowRect.height - y - 150f);
-        GUI.Box(listRect, string.Empty, CommanderUiTheme.Panel);
-        CommanderUiTheme.DrawSubtleBorder(listRect, 1f);
+        GUI.Box(listRect, string.Empty, BuilderUiTheme.Panel);
+        BuilderUiTheme.DrawSubtleBorder(listRect, 1f);
 
         // Calculate content height including category headers
         int visibleItemCount = 0;
@@ -204,7 +204,7 @@ internal CommanderBuildingPlacementUi(CommanderBuildingPlacementService service,
                 if (GUI.Button(
                     new Rect(4f, currentY, viewRect.width - 8f, 36f),
                     headerText,
-                    CommanderUiTheme.Button))
+                    BuilderUiTheme.Button))
                 {
                     service.ToggleCategoryExpanded(definition.Category);
                 }
@@ -216,8 +216,8 @@ internal CommanderBuildingPlacementUi(CommanderBuildingPlacementService service,
             {
                 bool canAfford = service.CanAffordDefinition(definition);
                 GUIStyle style = ReferenceEquals(definition, selected)
-                    ? CommanderUiTheme.SelectedButton
-                    : CommanderUiTheme.Button;
+                    ? BuilderUiTheme.SelectedButton
+                    : BuilderUiTheme.Button;
                 bool previousEnabled = GUI.enabled;
                 GUI.enabled = previousEnabled && canAfford;
                 if (GUI.Button(
@@ -244,7 +244,7 @@ internal CommanderBuildingPlacementUi(CommanderBuildingPlacementService service,
             GUI.Label(
                 new Rect(14f, buttonY - 50f, windowRect.width - 28f, 42f),
                 status,
-                CommanderUiTheme.MutedLabel);
+                BuilderUiTheme.MutedLabel);
         }
 
         bool oldEnabled = GUI.enabled;
@@ -252,7 +252,7 @@ internal CommanderBuildingPlacementUi(CommanderBuildingPlacementService service,
         if (GUI.Button(
             new Rect(12f, buttonY, windowRect.width - 24f, 38f),
             service.AwaitingPlacementSelection ? "CANCEL LOCATION SELECTION" : "SELECT LOCATION",
-            service.AwaitingPlacementSelection ? CommanderUiTheme.DangerButton : CommanderUiTheme.PrimaryButton))
+            service.AwaitingPlacementSelection ? BuilderUiTheme.DangerButton : BuilderUiTheme.PrimaryButton))
         {
             if (service.AwaitingPlacementSelection)
             {
@@ -269,7 +269,7 @@ internal CommanderBuildingPlacementUi(CommanderBuildingPlacementService service,
         if (GUI.Button(
             new Rect(12f, buttonY + 42f, windowRect.width - 24f, 38f),
             "EXIT",
-            CommanderUiTheme.DangerButton))
+            BuilderUiTheme.DangerButton))
         {
             onExit?.Invoke();
         }
@@ -279,7 +279,7 @@ internal CommanderBuildingPlacementUi(CommanderBuildingPlacementService service,
 
     private void DrawBuildTimeWindow(int _)
     {
-        if (GUI.Button(new Rect(buildTimeWindowRect.width - 34f, 3f, 26f, 22f), "X", CommanderUiTheme.DangerButton))
+        if (GUI.Button(new Rect(buildTimeWindowRect.width - 34f, 3f, 26f, 22f), "X", BuilderUiTheme.DangerButton))
         {
             buildTimeControlsVisible = false;
             return;
@@ -288,22 +288,22 @@ internal CommanderBuildingPlacementUi(CommanderBuildingPlacementService service,
         GUI.Label(
             new Rect(12f, 34f, buildTimeWindowRect.width - 24f, 22f),
             service.BuildTimeSettingLabel,
-            CommanderUiTheme.Header);
+            BuilderUiTheme.Header);
 
         Rect previewRect = new(12f, 62f, buildTimeWindowRect.width - 24f, 42f);
-        GUI.Box(previewRect, string.Empty, CommanderUiTheme.Panel);
+        GUI.Box(previewRect, string.Empty, BuilderUiTheme.Panel);
         GUI.Label(
             new Rect(previewRect.x + 10f, previewRect.y + 8f, previewRect.width - 20f, 24f),
             service.BuildTimePreviewLabel,
-            CommanderUiTheme.MutedLabel);
-        CommanderUiTheme.DrawSubtleBorder(previewRect, 1f);
+            BuilderUiTheme.MutedLabel);
+        BuilderUiTheme.DrawSubtleBorder(previewRect, 1f);
 
-        if (GUI.Button(new Rect(12f, 112f, 46f, 30f), "-", CommanderUiTheme.Button))
+        if (GUI.Button(new Rect(12f, 112f, 46f, 30f), "-", BuilderUiTheme.Button))
         {
             service.AdjustBuildTimeMultiplier(increase: false);
         }
 
-        if (GUI.Button(new Rect(64f, 112f, 46f, 30f), "+", CommanderUiTheme.Button))
+        if (GUI.Button(new Rect(64f, 112f, 46f, 30f), "+", BuilderUiTheme.Button))
         {
             service.AdjustBuildTimeMultiplier(increase: true);
         }
@@ -311,7 +311,7 @@ internal CommanderBuildingPlacementUi(CommanderBuildingPlacementService service,
         GUI.Label(
             new Rect(120f, 112f, buildTimeWindowRect.width - 132f, 30f),
             "Applies to new queued builds",
-            CommanderUiTheme.MutedLabel);
+            BuilderUiTheme.MutedLabel);
 
         GUI.DragWindow(new Rect(0f, 0f, buildTimeWindowRect.width - 38f, 28f));
     }
@@ -323,11 +323,11 @@ internal CommanderBuildingPlacementUi(CommanderBuildingPlacementService service,
             return;
         }
 
-        float width = Mathf.Min(470f, CommanderUiScale.Width - 24f);
-        float height = Mathf.Min(800f, CommanderUiScale.Height - 24f);
+        float width = Mathf.Min(470f, BuilderUiScale.Width - 24f);
+        float height = Mathf.Min(800f, BuilderUiScale.Height - 24f);
         windowRect = new Rect(
             74f,
-            Mathf.Max(12f, (CommanderUiScale.Height - height) * 0.5f),
+            Mathf.Max(12f, (BuilderUiScale.Height - height) * 0.5f),
             width,
             height);
         positionInitialized = true;
@@ -340,13 +340,14 @@ internal CommanderBuildingPlacementUi(CommanderBuildingPlacementService service,
             return;
         }
 
-        float width = Mathf.Min(320f, CommanderUiScale.Width - 24f);
+        float width = Mathf.Min(320f, BuilderUiScale.Width - 24f);
         float height = 320f;
         buildTimeWindowRect = new Rect(
-            Mathf.Clamp(windowRect.x + windowRect.width + 10f, 12f, Mathf.Max(12f, CommanderUiScale.Width - width - 12f)),
-            Mathf.Clamp(windowRect.y + 24f, 12f, Mathf.Max(12f, CommanderUiScale.Height - height - 12f)),
+            Mathf.Clamp(windowRect.x + windowRect.width + 10f, 12f, Mathf.Max(12f, BuilderUiScale.Width - width - 12f)),
+            Mathf.Clamp(windowRect.y + 24f, 12f, Mathf.Max(12f, BuilderUiScale.Height - height - 12f)),
             width,
             height);
         buildTimeWindowPositionInitialized = true;
     }
 }
+

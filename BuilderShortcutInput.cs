@@ -1,9 +1,9 @@
 using BepInEx.Configuration;
 using UnityEngine;
 
-namespace NuclearOptionCommander;
+namespace NuclearOptionBuilder;
 
-internal static class CommanderShortcutInput
+internal static class BuilderShortcutInput
 {
     internal static bool IsDown(KeyboardShortcut shortcut)
     {
@@ -32,3 +32,4 @@ internal static class CommanderShortcutInput
         return true;
     }
 }
+
