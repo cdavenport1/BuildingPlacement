@@ -11,8 +11,8 @@
 #pragma warning disable CA2243
 
 [assembly: global::System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
-[assembly: global::System.Reflection.AssemblyFileVersionAttribute("1.0.18.50629")]
-[assembly: global::System.Reflection.AssemblyInformationalVersionAttribute("1.0.18+c5c52e6334")]
+[assembly: global::System.Reflection.AssemblyFileVersionAttribute("1.0.19.25841")]
+[assembly: global::System.Reflection.AssemblyInformationalVersionAttribute("1.0.19+64f1c7c915")]
 #if NETSTANDARD || NETFRAMEWORK || NETCOREAPP
 [global::System.CodeDom.Compiler.GeneratedCode("Nerdbank.GitVersioning.Tasks","3.10.91.57434")]
 #endif
@@ -21,14 +21,14 @@
 #endif
 internal static partial class ThisAssembly {
     internal const string AssemblyConfiguration = "Release";
-    internal const string AssemblyFileVersion = "1.0.18.50629";
-    internal const string AssemblyInformationalVersion = "1.0.18+c5c52e6334";
+    internal const string AssemblyFileVersion = "1.0.19.25841";
+    internal const string AssemblyInformationalVersion = "1.0.19+64f1c7c915";
     internal const string AssemblyName = "BuildingPlacement";
     internal const string AssemblyTitle = "BuildingPlacement";
     internal const string AssemblyVersion = "1.0.0.0";
-    internal static readonly global::System.DateTime GitCommitAuthorDate = new global::System.DateTime(639223718650000000L, global::System.DateTimeKind.Utc);
-    internal static readonly global::System.DateTime GitCommitDate = new global::System.DateTime(639223718650000000L, global::System.DateTimeKind.Utc);
-    internal const string GitCommitId = "c5c52e6334270c884d3bf76d57a79dfaa55e2f0b";
+    internal static readonly global::System.DateTime GitCommitAuthorDate = new global::System.DateTime(639224306740000000L, global::System.DateTimeKind.Utc);
+    internal static readonly global::System.DateTime GitCommitDate = new global::System.DateTime(639224306740000000L, global::System.DateTimeKind.Utc);
+    internal const string GitCommitId = "64f1c7c915d0840949e3b7be4bc318249835875c";
     internal const bool IsPrerelease = false;
     internal const bool IsPublicRelease = true;
     internal const string RootNamespace = "NuclearOptionCommander";

@@ -144,7 +144,7 @@ internal CommanderBuildingPlacementUi(CommanderBuildingPlacementService service,
             return;
         }
 
-        if (GUI.Button(new Rect(windowRect.width - 94f, 3f, 26f, 22f), "⚙", CommanderUiTheme.Button))
+        if (GUI.Button(new Rect(windowRect.width - 118f, 3f, 50f, 22f), "DBG", CommanderUiTheme.Button))
         {
             buildTimeControlsVisible = !buildTimeControlsVisible;
             if (buildTimeControlsVisible)
