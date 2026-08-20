@@ -16,11 +16,14 @@ internal enum BuildCategory
 internal sealed class BuilderBuildingPlacementService
 {
     private const float MinimumBuildingCostMillions = 5f;
-    private const float BuildDelayStepMinutes = 5f;
-    private const float BaseMinimumBuildDelayMinutes = 5f;
+    private const float BuildDelayStepMinutes = 1f;
+    private const float BaseMinimumBuildDelayMinutes = 0.5f;
     private const float BaseMaximumBuildDelayMinutes = 180f;
     private const float FinalMinimumBuildDelayMinutes = 0f;
-    private const float FinalMaximumBuildDelayMinutes = 15f;
+    private const float FinalMaximumBuildDelayMinutes = 10f;
+    private const float MaximumBuildDelayShipsMinutes = 5f;
+    private const float MaximumBuildDelayVehiclesMinutes = 3f;
+    private const float MaximumBuildDelayLargeCarrierMinutes = 10f;
     private const float MinimumBuildTimeMultiplier = 0f;
     private const float MaximumBuildTimeMultiplier = 4f;
     private const float BuildTimeMultiplierStep = 0.25f;
@@ -39,6 +42,30 @@ internal sealed class BuilderBuildingPlacementService
         { BuildCategory.Naval, true },
         { BuildCategory.Vehicles, true }
     };
+    
+    internal void LoadCategoryStates()
+    {
+        categoryExpandedState[BuildCategory.Structures] = BuilderSettings.StructuresExpanded;
+        categoryExpandedState[BuildCategory.Naval] = BuilderSettings.NavalExpanded;
+        categoryExpandedState[BuildCategory.Vehicles] = BuilderSettings.VehiclesExpanded;
+    }
+    
+    private void SaveCategoryState(BuildCategory category)
+    {
+        bool isExpanded = categoryExpandedState.TryGetValue(category, out bool expanded) && expanded;
+        switch (category)
+        {
+            case BuildCategory.Structures:
+                BuilderSettings.StructuresExpanded = isExpanded;
+                break;
+            case BuildCategory.Naval:
+                BuilderSettings.NavalExpanded = isExpanded;
+                break;
+            case BuildCategory.Vehicles:
+                BuilderSettings.VehiclesExpanded = isExpanded;
+                break;
+        }
+    }
     private bool awaitingPlacementSelection;
     private bool awaitingOrientationConfirmation;
     private GlobalPosition pendingPlacementTarget;
@@ -87,8 +114,8 @@ internal sealed class BuilderBuildingPlacementService
                 return "No building selected";
             }
 
-            float baseMinutes = GetBuildDelayMinutes(definition.Value);
-            float adjustedMinutes = GetBuildDelayMinutesWithSetting(definition.Value);
+            float baseMinutes = GetBuildDelayMinutes(definition.Value, definition);
+            float adjustedMinutes = GetBuildDelayMinutesWithSetting(definition.Value, definition);
             return $"{baseMinutes:0}m -> {adjustedMinutes:0}m";
         }
     }
@@ -148,9 +175,21 @@ internal sealed class BuilderBuildingPlacementService
         {
             QueuedPlacement queued = pendingPlacements[i];
             float remainingSeconds = queued.timerStarted
-                ? Mathf.Max(0f, queued.completeAt - Time.unscaledTime)
+                ? Mathf.Max(0f, queued.buildDelaySeconds - queued.elapsedBuildSeconds)
                 : -1f;
-            float radius = GetJackknifeActivationRadius(queued.definition);
+            float radius;
+            if (queued.definition.IsShip)
+            {
+                radius = GetLargeFactoryActivationRadius(queued.definition);
+            }
+            else if (queued.definition.IsVehicle)
+            {
+                radius = GetVehicleDepotActivationRadius();
+            }
+            else
+            {
+                radius = GetJackknifeActivationRadius(queued.definition);
+            }
             statuses[i] = new PendingPlacementStatus(
                 queued.definition.UnitName,
                 queued.target,
@@ -168,6 +207,7 @@ internal sealed class BuilderBuildingPlacementService
         if (categoryExpandedState.ContainsKey(category))
         {
             categoryExpandedState[category] = !categoryExpandedState[category];
+            SaveCategoryState(category);
         }
     }
 
@@ -179,6 +219,7 @@ internal sealed class BuilderBuildingPlacementService
     internal void Activate()
     {
         EnsurePlacementCalibrationDefaults();
+        LoadCategoryStates();
         RefreshBuildingDefinitions();
         nextRefreshAt = BuilderScheduler.Stagger("building-placement", RefreshIntervalSeconds, 0.4f);
     }
@@ -261,7 +302,13 @@ internal sealed class BuilderBuildingPlacementService
     internal string GetDefinitionLabel(PlaceableDefinition definition)
     {
         string cost = FormatCostMillions(definition.Value);
-        string type = definition.IsShip ? "Ship" : definition.BuildingDefinition?.jsonKey ?? "Building";
+        string type;
+        if (definition.IsShip)
+            type = "Ship";
+        else if (definition.IsVehicle)
+            type = "Vehicle";
+        else
+            type = definition.BuildingDefinition?.jsonKey ?? "Building";
         return $"{definition.UnitName}\n{type}  |  {cost}";
     }
 
@@ -506,7 +553,7 @@ internal sealed class BuilderBuildingPlacementService
             return;
         }
 
-        float buildDelayMinutes = GetBuildDelayMinutesWithSetting(cost);
+        float buildDelayMinutes = GetBuildDelayMinutesWithSetting(cost, definition);
         float buildDelaySeconds = buildDelayMinutes * 60f;
         float calibratedYaw = GetCalibratedPlacementYawDegrees(yawDegrees);
         Quaternion rotation = BuildPlacementRotation(yawDegrees);
@@ -627,6 +674,33 @@ internal sealed class BuilderBuildingPlacementService
                 }
             }
             
+            // Check if preview ammo dump was destroyed - if so, cancel placement without refund
+            bool ammoDumpDestroyed = false;
+            if (queued.previewAmmoDump != null)
+            {
+                try
+                {
+                    // Check if the Unit or its gameObject has been destroyed
+                    if (queued.previewAmmoDump.gameObject == null || queued.previewAmmoDump.gameObject.scene.name == null)
+                    {
+                        ammoDumpDestroyed = true;
+                    }
+                }
+                catch
+                {
+                    // If we get an exception accessing the object, it's been destroyed
+                    ammoDumpDestroyed = true;
+                }
+            }
+            
+            if (ammoDumpDestroyed)
+            {
+                DestroyQueuedPlacementPreview(queued);
+                pendingPlacements.RemoveAt(i);
+                SetStatus($"{queued.definition.UnitName} placement cancelled: preview structure was destroyed.", warning: true);
+                continue;
+            }
+            
             if (!queued.timerStarted)
             {
                 if (!TryStartQueuedPlacementTimer(queued))
@@ -637,14 +711,20 @@ internal sealed class BuilderBuildingPlacementService
                 pendingPlacements[i] = queued;
             }
 
+            // Accumulate build time (Time.deltaTime is 0 when game is paused)
+            if (queued.timerStarted)
+            {
+                queued.elapsedBuildSeconds += Time.deltaTime;
+            }
+
             // Remove preview 5 seconds before build completes to avoid spawn conflicts
-            float timeRemaining = queued.completeAt - Time.unscaledTime;
+            float timeRemaining = queued.buildDelaySeconds - queued.elapsedBuildSeconds;
             if (queued.timerStarted && timeRemaining <= 5f && queued.previewAmmoDump != null)
             {
                 DestroyQueuedPlacementPreview(queued);
             }
 
-            if (Time.unscaledTime < queued.completeAt)
+            if (queued.elapsedBuildSeconds < queued.buildDelaySeconds)
             {
                 continue;
             }
@@ -701,7 +781,7 @@ internal sealed class BuilderBuildingPlacementService
 
         queued.timerStarted = true;
         queued.startedAt = Time.unscaledTime;
-        queued.completeAt = queued.startedAt + queued.buildDelaySeconds;
+        queued.elapsedBuildSeconds = 0f;
         return true;
     }
 
@@ -844,25 +924,15 @@ internal sealed class BuilderBuildingPlacementService
     {
         // Vehicles require a fixed radius to be near a depot
         // Smaller than Jackknife since depots are more common than construction vehicles
-        return 75f;
+        return 150f;
     }
 
     private static float GetLargeFactoryActivationRadius(PlaceableDefinition definition)
     {
-        // Ships require a minimum 350m Large Factory activation radius with size-based scaling
+        // Ships require a fixed 900m Large Factory activation radius
         if (definition.IsShip)
         {
-            ShipDefinition? ship = definition.ShipDefinition;
-            if (ship == null)
-            {
-                return 350f;
-            }
-
-            // Scale up based on ship size dimensions
-            float shipSize = Mathf.Max(ship.width, ship.height, ship.length);
-            float shipSizeMultiplier = Mathf.Max(0f, (shipSize - 20f) / 30f);
-            float shipRadiusFromSize = 350f + shipSizeMultiplier * 450f;
-            return Mathf.Clamp(shipRadiusFromSize, 350f, 800f);
+            return 900f;
         }
 
         return 160f;
@@ -966,6 +1036,12 @@ internal sealed class BuilderBuildingPlacementService
                     queued.rotation,
                     hq,
                     queued.spawnName);
+                
+                // Enable AI for ground vehicles
+                if (unit is GroundVehicle groundVehicle)
+                {
+                    groundVehicle.SetHoldPosition(false);
+                }
             }
             else if (definition.BuildingDefinition != null)
             {
@@ -987,13 +1063,11 @@ internal sealed class BuilderBuildingPlacementService
                 throw new InvalidOperationException($"Spawner returned null for {definition.UnitName}.");
             }
 
-            if (unit is GroundVehicle groundVehicle)
+            // Enable AI for ships (they already spawn with holdPosition: false from SpawnShip)
+            // Enable AI for buildings (not applicable, but ship was already enabled above)
+            if (unit is Ship ship && definition.IsShip)
             {
-                groundVehicle.SetHoldPosition(true);
-            }
-            else if (unit is Ship ship)
-            {
-                ship.SetHoldPosition(true);
+                // Ship AI is already enabled via holdPosition: false parameter in SpawnShip
             }
 
             SetStatus($"{definition.UnitName} completed for {FormatCostMillions(queued.cost)}.");
@@ -1114,18 +1188,63 @@ internal sealed class BuilderBuildingPlacementService
         return "$" + value.ToString("0.##") + "m";
     }
 
-    private static float GetBuildDelayMinutes(float costMillions)
+    private bool IsLargeCarrier(PlaceableDefinition definition)
     {
+        if (!definition.IsShip || definition.ShipDefinition == null)
+        {
+            return false;
+        }
+        
+        string shipName = definition.ShipDefinition.unitName;
+        return shipName.IndexOf("Large", StringComparison.OrdinalIgnoreCase) >= 0 ||
+               shipName.IndexOf("Carrier", StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    private float GetMaximumBuildDelayForDefinition(PlaceableDefinition definition)
+    {
+        if (definition.IsVehicle)
+        {
+            return MaximumBuildDelayVehiclesMinutes;
+        }
+        
+        if (definition.IsShip)
+        {
+            return IsLargeCarrier(definition) 
+                ? MaximumBuildDelayLargeCarrierMinutes 
+                : MaximumBuildDelayShipsMinutes;
+        }
+        
+        // Buildings use the default max
+        return FinalMaximumBuildDelayMinutes;
+    }
+
+    private float GetBuildDelayMinutes(float costMillions, PlaceableDefinition definition)
+    {
+        // Ships use a separate cost-based linear scale
+        if (definition.IsShip)
+        {
+            // Scale ships from $26M (2 min) to $3500M (10 min) linearly
+            const float shipMinCost = 26f;
+            const float shipMaxCost = 3500f;
+            const float shipMinMinutes = 2f;
+            const float shipMaxMinutes = 10f;
+            
+            float baseMinutes = shipMinMinutes + (costMillions - shipMinCost) / (shipMaxCost - shipMinCost) * (shipMaxMinutes - shipMinMinutes);
+            return Mathf.Clamp(baseMinutes, shipMinMinutes, shipMaxMinutes);
+        }
+        
+        // Non-ships use the standard step-based formula
         float steppedMinutes = Mathf.Ceil(costMillions / BuildDelayStepMinutes) * BuildDelayStepMinutes;
         return Mathf.Clamp(steppedMinutes, BaseMinimumBuildDelayMinutes, BaseMaximumBuildDelayMinutes);
     }
 
-    private float GetBuildDelayMinutesWithSetting(float costMillions)
+    private float GetBuildDelayMinutesWithSetting(float costMillions, PlaceableDefinition definition)
     {
-        float baseMinutes = GetBuildDelayMinutes(costMillions);
+        float baseMinutes = GetBuildDelayMinutes(costMillions, definition);
         float scaledMinutes = baseMinutes * buildTimeMultiplier;
         float steppedScaledMinutes = Mathf.Ceil(scaledMinutes);
-        return Mathf.Clamp(steppedScaledMinutes, FinalMinimumBuildDelayMinutes, FinalMaximumBuildDelayMinutes);
+        float maxDelay = GetMaximumBuildDelayForDefinition(definition);
+        return Mathf.Clamp(steppedScaledMinutes, FinalMinimumBuildDelayMinutes, maxDelay);
     }
 
     private void SpawnPreviewAmmoDump(GlobalPosition target, Quaternion rotation)
@@ -1207,6 +1326,7 @@ internal sealed class BuilderBuildingPlacementService
         internal float startedAt;
         internal float completeAt;
         internal float createdAt;
+        internal float elapsedBuildSeconds;
         internal Unit? previewAmmoDump;
 
         internal QueuedPlacement(
@@ -1226,6 +1346,7 @@ internal sealed class BuilderBuildingPlacementService
             this.startedAt = 0f;
             this.completeAt = float.PositiveInfinity;
             this.createdAt = Time.unscaledTime;
+            this.elapsedBuildSeconds = 0f;
             this.timerStarted = false;
         }
     }
@@ -1315,7 +1436,7 @@ internal sealed class PlaceableDefinition
         UnitName = definition.unitName;
         Value = definition.value;
         UnitPrefab = definition.unitPrefab;
-        float shipVerticalOffset = Mathf.Max(0.5f, definition.height * 0.05f);
+        float shipVerticalOffset = Mathf.Max(2.0f, definition.height * 0.1f);
         SpawnOffset = new Vector3(0f, shipVerticalOffset, 0f);
         Category = BuildCategory.Naval;
     }

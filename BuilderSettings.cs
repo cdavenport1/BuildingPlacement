@@ -25,6 +25,9 @@ internal static class BuilderSettings
     internal static float PlacementOrientationOffsetDegrees { get => Get("Placement", "OrientationOffsetDegrees", 0f); set => Set("Placement", "OrientationOffsetDegrees", value); }
     internal static bool PlacementReverseScrollDirection { get => Get("Placement", "ReverseScrollDirection", false); set => Set("Placement", "ReverseScrollDirection", value); }
     internal static bool PlacementShowShips { get => Get("Placement", "ShowShips", true); set => Set("Placement", "ShowShips", value); }
+    internal static bool StructuresExpanded { get => Get("Placement", "StructuresExpanded", true); set => Set("Placement", "StructuresExpanded", value); }
+    internal static bool NavalExpanded { get => Get("Placement", "NavalExpanded", true); set => Set("Placement", "NavalExpanded", value); }
+    internal static bool VehiclesExpanded { get => Get("Placement", "VehiclesExpanded", true); set => Set("Placement", "VehiclesExpanded", value); }
     internal static KeyboardShortcut PrimaryAction { get => GetShortcut("PrimaryAction", KeyCode.Mouse0, "Place a building or interact with the UI."); set => Set("Keybinds", "PrimaryAction", value); }
     internal static KeyboardShortcut CancelAction { get => GetShortcut("CancelAction", KeyCode.Escape, "Cancel building placement."); set => Set("Keybinds", "CancelAction", value); }
 
@@ -46,6 +49,9 @@ internal static class BuilderSettings
         _ = PlacementOrientationOffsetDegrees;
         _ = PlacementReverseScrollDirection;
         _ = PlacementShowShips;
+        _ = StructuresExpanded;
+        _ = NavalExpanded;
+        _ = VehiclesExpanded;
         _ = PrimaryAction;
         _ = CancelAction;
     }

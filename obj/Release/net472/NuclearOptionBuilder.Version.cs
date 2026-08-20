@@ -10,9 +10,9 @@
 
 #pragma warning disable CA2243
 
-[assembly: global::System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
-[assembly: global::System.Reflection.AssemblyFileVersionAttribute("1.0.21.25531")]
-[assembly: global::System.Reflection.AssemblyInformationalVersionAttribute("1.0.21+63bb1398c7")]
+[assembly: global::System.Reflection.AssemblyVersionAttribute("1.1.0.0")]
+[assembly: global::System.Reflection.AssemblyFileVersionAttribute("1.1.1.39412")]
+[assembly: global::System.Reflection.AssemblyInformationalVersionAttribute("1.1.1+99f4b75713")]
 #if NETSTANDARD || NETFRAMEWORK || NETCOREAPP
 [global::System.CodeDom.Compiler.GeneratedCode("Nerdbank.GitVersioning.Tasks","3.10.91.57434")]
 #endif
@@ -21,14 +21,14 @@
 #endif
 internal static partial class ThisAssembly {
     internal const string AssemblyConfiguration = "Release";
-    internal const string AssemblyFileVersion = "1.0.21.25531";
-    internal const string AssemblyInformationalVersion = "1.0.21+63bb1398c7";
+    internal const string AssemblyFileVersion = "1.1.1.39412";
+    internal const string AssemblyInformationalVersion = "1.1.1+99f4b75713";
     internal const string AssemblyName = "NuclearOptionBuilder";
     internal const string AssemblyTitle = "NuclearOptionBuilder";
-    internal const string AssemblyVersion = "1.0.0.0";
-    internal static readonly global::System.DateTime GitCommitAuthorDate = new global::System.DateTime(639224315590000000L, global::System.DateTimeKind.Utc);
-    internal static readonly global::System.DateTime GitCommitDate = new global::System.DateTime(639224315590000000L, global::System.DateTimeKind.Utc);
-    internal const string GitCommitId = "63bb1398c7e6acc679330f5fba8794e998ebfbce";
+    internal const string AssemblyVersion = "1.1.0.0";
+    internal static readonly global::System.DateTime GitCommitAuthorDate = new global::System.DateTime(639224341310000000L, global::System.DateTimeKind.Utc);
+    internal static readonly global::System.DateTime GitCommitDate = new global::System.DateTime(639224341310000000L, global::System.DateTimeKind.Utc);
+    internal const string GitCommitId = "99f4b75713415a4ad067654993b5649fc911a61b";
     internal const bool IsPrerelease = false;
     internal const bool IsPublicRelease = true;
     internal const string RootNamespace = "NuclearOptionBuilder";

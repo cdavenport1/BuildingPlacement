@@ -20,15 +20,13 @@ The plugin organizes all placeable units into three categories:
 
 #### **2. Naval (Ships)**
 - Requires proximity to a **Large Factory** facility
-- **Distance constraint: 350-800m from Large Factory** (size-dependent)
+- **Distance constraint: 350-900m from Large Factory** (fixed)
 - Minimum distance requirement: **350m** (must not be placed too close)
-- Placement on water surface with proper sea-level intersection
-- Dynamic help text shows distance range based on selected ship size
 - Timeout: 5 seconds to find a Large Factory or placement is cancelled with refund
 
 #### **3. Vehicles (Ground Units)**
 - Requires proximity to a **Vehicle Depot** facility
-- Distance requirement: 75m radius
+- Distance requirement: 150m radius
 - Includes tanks, APCs, and other ground vehicles
 - Timeout: 5 seconds to find a depot or placement is cancelled with refund
 
@@ -107,10 +105,7 @@ The plugin organizes all placeable units into three categories:
 
 Ships enforce proximity constraints:
 - **Minimum distance**: 350m from Large Factory (prevents placement too close)
-- **Maximum distance**: 350-800m (size-dependent scaling)
-- Formula: `350f + ((shipSize - 20f) / 30f) * 450f`, clamped to [350, 800]
-
-Smaller ships default to 350m max, larger ships scale up to 800m based on their dimensions.
+- **Maximum distance**: 900m (fixed for all ship sizes)
 
 ### Build System
 
@@ -133,13 +128,13 @@ Build time multipliers can be adjusted in-game via the Settings panel. No extern
 ## Troubleshooting
 
 ### "No Large Factory found"
-- Ensure a Large Factory is within the required 350-800m range
+- Ensure a Large Factory is within the required 900m range
 - Check that the facility is built and active
 - Verify you're placing the ship within 5 seconds
 
 ### Ship placement fails with distance error
 - "Ship placed too close" = within 350m of factory (move farther away)
-- Beyond max range = outside 800m distance (move closer to factory)
+- Beyond max range = outside 900m distance (move closer to factory)
 
 ### Building won't place near Jackknife
 - Ensure Jackknife is within range (50-120m depending on building type)

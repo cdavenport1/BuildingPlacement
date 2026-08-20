@@ -110,17 +110,11 @@ internal BuilderBuildingPlacementUi(BuilderBuildingPlacementService service, Act
         {
             if (selected.IsVehicle)
             {
-                helpText = "SELECT a ground vehicle, then CLICK TO PLACE it. It MUST be placed within 75m of a Vehicle Depot to spawn there. Placement times out in 5 seconds if no depot is found.";
+                helpText = "SELECT a ground vehicle, then CLICK TO PLACE it. It MUST be placed within 150m of a Vehicle Depot to spawn there. Placement times out in 5 seconds if no depot is found.";
             }
             else if (selected.IsShip)
             {
-                // Calculate ship-specific Large Factory distance
-                ShipDefinition? shipDef = selected.ShipDefinition;
-                float shipSize = shipDef != null ? Mathf.Max(shipDef.width, shipDef.height, shipDef.length) : 0f;
-                float shipSizeMultiplier = Mathf.Max(0f, (shipSize - 20f) / 30f);
-                float shipRadiusFromSize = 350f + shipSizeMultiplier * 450f;
-                float shipRadius = Mathf.Clamp(shipRadiusFromSize, 350f, 800f);
-                helpText = $"SELECT a ship, then CLICK TO PLACE it on water. It MUST be placed between 350m and {shipRadius:0}m from a Large Factory to spawn there. Placement times out in 5 seconds if no factory is found.";
+                helpText = $"SELECT a ship, then CLICK TO PLACE it. It MUST be placed between 350m and 900m from a Large Factory to spawn there. Placement times out in 5 seconds if no factory is found.";
             }
             else
             {
