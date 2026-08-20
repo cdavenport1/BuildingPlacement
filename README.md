@@ -1,16 +1,16 @@
-# Building Placement Plugin
+# Building Placement Mod
 
 A BepInEx plugin for **Nuclear Option** that adds a comprehensive building, vehicle, and ship placement system with proximity-based construction requirements.
 
 ## Overview
 
-This plugin provides an in-game UI for placing structures, vehicles, and ships directly without using the standard commander interface. Each unit type has unique placement requirements based on nearby facility proximity.
+This plugin provides an in-game UI for placing structures, vehicles, and ships directly. Each unit type has unique placement requirements based on nearby facility proximity.
 
 ## Major Features
 
 ### 🏗️ Three-Category Placement System
 
-The plugin organizes all placeable units into three categories:
+The mod organizes all placeable units into three categories:
 
 #### **1. Structures (Buildings)**
 - Requires proximity to a **Jackknife** construction vehicle
@@ -20,19 +20,21 @@ The plugin organizes all placeable units into three categories:
 
 #### **2. Naval (Ships)**
 - Requires proximity to a **Large Factory** facility
-- **Distance constraint: 350-900m from Large Factory** (fixed)
+- **Distance constraint: 350-800m from Large Factory** (size-dependent)
 - Minimum distance requirement: **350m** (must not be placed too close)
+- Placement on water surface with proper sea-level intersection
+- Dynamic help text shows distance range based on selected ship size
 - Timeout: 5 seconds to find a Large Factory or placement is cancelled with refund
 
 #### **3. Vehicles (Ground Units)**
 - Requires proximity to a **Vehicle Depot** facility
-- Distance requirement: 150m radius
+- Distance requirement: 75m radius
 - Includes tanks, APCs, and other ground vehicles
 - Timeout: 5 seconds to find a depot or placement is cancelled with refund
 
 ### 💰 Faction Funds Display
 - Real-time faction funds shown at the top of the UI
-- Instant visual feedback when unit costs are deducted
+- Visual feedback when unit costs are deducted
 - Auto-refund if placement timeout occurs
 
 ### 🎨 Enhanced User Interface
@@ -57,14 +59,9 @@ The plugin organizes all placeable units into three categories:
    Nuclear Option\BepInEx\plugins\
    ```
 3. Copy `BuildingPlacement.pdb` to the same folder (optional, for debugging)
-4. Launch Nuclear Option — the plugin will load automatically
+4. Launch Nuclear Option — the mod should load automatically
 
 ## Usage
-
-### Opening the Plugin
-
-- Press the Building Placement hotkey (configurable in-game) to open the main UI window
-- The window appears as "BUILDING PLACEMENT" at the top
 
 ### Placing Units
 
@@ -104,8 +101,10 @@ The plugin organizes all placeable units into three categories:
 ### Distance Validation
 
 Ships enforce proximity constraints:
-- **Minimum distance**: 350m from Large Factory (prevents placement too close)
-- **Maximum distance**: 900m (fixed for all ship sizes)
+- **Minimum distance**: 350m from Large Factory (prevents placement too close) and potentially on shallow water where larger ships will get stuck
+- **Maximum distance**: 350-800m (size-dependent scaling)
+
+Smaller ships default to 350m max, larger ships scale up to 800m based on their dimensions.
 
 ### Build System
 
@@ -128,13 +127,12 @@ Build time multipliers can be adjusted in-game via the Settings panel. No extern
 ## Troubleshooting
 
 ### "No Large Factory found"
-- Ensure a Large Factory is within the required 900m range
+- Ensure a Large Factory is within the required 350-800m range
 - Check that the facility is built and active
-- Verify you're placing the ship within 5 seconds
 
 ### Ship placement fails with distance error
 - "Ship placed too close" = within 350m of factory (move farther away)
-- Beyond max range = outside 900m distance (move closer to factory)
+- Beyond max range = outside 800m distance (move closer to factory)
 
 ### Building won't place near Jackknife
 - Ensure Jackknife is within range (50-120m depending on building type)
@@ -168,7 +166,3 @@ Thanks to **rose.clara** for the **NOCommander** mod, which this Building Placem
 ## License
 
 See LICENSE file in project root.
-
-## Version
-
-Current version: **1.0.0** (last updated August 15, 2026)
