@@ -19,11 +19,12 @@ internal sealed class BuilderBuildingPlacementService
     private const float BuildDelayStepMinutes = 1f;
     private const float BaseMinimumBuildDelayMinutes = 0.5f;
     private const float BaseMaximumBuildDelayMinutes = 180f;
-    private const float FinalMinimumBuildDelayMinutes = 0f;
+    private const float FinalMinimumBuildDelayMinutes = 0.1667f;  // 10 seconds minimum
     private const float FinalMaximumBuildDelayMinutes = 10f;
     private const float MaximumBuildDelayShipsMinutes = 5f;
     private const float MaximumBuildDelayVehiclesMinutes = 3f;
     private const float MaximumBuildDelayLargeCarrierMinutes = 10f;
+    private const float BuildTimeMultiplierFor10Seconds = 0f;  // 0x multiplier = 10 seconds instant placement
     private const float MinimumBuildTimeMultiplier = 0f;
     private const float MaximumBuildTimeMultiplier = 4f;
     private const float BuildTimeMultiplierStep = 0.25f;
