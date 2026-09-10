@@ -24,6 +24,7 @@ public sealed class BuilderPlugin : BaseUnityPlugin
         }
 
         harmony = new Harmony(PluginInfo.Guid);
+        // BepInEx guarantees Awake runs once per plugin load, so no double-patch guard is needed here
         harmony.PatchAll();
         gameObject.AddComponent<BuildingPlacementController>();
         Logger.LogInfo($"{PluginInfo.Name} {PluginInfo.Version} loaded");

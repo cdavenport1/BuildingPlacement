@@ -239,7 +239,6 @@ internal sealed class BuildingPlacementController : MonoBehaviour
 
         // Position floating panel offset from cursor (right/below)
         Vector2 guiPoint = BuilderUiScale.ScreenToGui(Input.mousePosition);
-        guiPoint = new Vector2(guiPoint.x + 20f, guiPoint.y + 20f);
         
         GUIStyle panelStyle = BuilderUiTheme.Panel;
         GUIStyle labelStyle = BuilderUiTheme.Label;
@@ -261,7 +260,16 @@ internal sealed class BuildingPlacementController : MonoBehaviour
         float panelWidth = Mathf.Max(nameWidth, headingWidth, hintWidth) + 20f;
         float panelHeight = 24f + 72f + 24f + 20f; // Increased heading area for larger arrow
 
-        Rect panelRect = new(guiPoint.x, guiPoint.y, panelWidth, panelHeight);
+        // Flip to the left/above the cursor instead of overflowing the screen edge
+        const float cursorOffset = 20f;
+        float panelX = guiPoint.x + panelWidth + cursorOffset > BuilderUiScale.Width
+            ? guiPoint.x - cursorOffset - panelWidth
+            : guiPoint.x + cursorOffset;
+        float panelY = guiPoint.y + panelHeight + cursorOffset > BuilderUiScale.Height
+            ? guiPoint.y - cursorOffset - panelHeight
+            : guiPoint.y + cursorOffset;
+
+        Rect panelRect = new(panelX, panelY, panelWidth, panelHeight);
 
         // Draw floating panel with subtle shadow
         DrawFloatingPanel(panelRect);
@@ -812,6 +820,20 @@ internal sealed class BuildingPlacementController : MonoBehaviour
             Rect marker = new(guiPoint.x + 12f, guiPoint.y - (pending[i].remainingSeconds < 0f ? 72f : 52f), width, height);
             GUI.Box(marker, text, style);
             BuilderUiTheme.DrawSubtleBorder(marker, 1f);
+
+            // Flip to the marker's left if the button would overflow the screen's right edge
+            float cancelButtonX = marker.xMax + 6f;
+            if (cancelButtonX + height > BuilderUiScale.Width)
+            {
+                cancelButtonX = marker.x - 6f - height;
+            }
+            Rect cancelButton = new(cancelButtonX, marker.y, height, height);
+            // Early return required: `pending` is a snapshot, so indices desync from pendingPlacements after a cancel
+            if (GUI.Button(cancelButton, "X", BuilderUiTheme.DangerButton))
+            {
+                service.CancelPendingPlacement(i);
+                return;
+            }
         }
     }
 
