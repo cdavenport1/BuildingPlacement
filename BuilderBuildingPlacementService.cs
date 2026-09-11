@@ -877,6 +877,13 @@ internal sealed class BuilderBuildingPlacementService
                 {
                     fuelContainerDestroyedInCombat = true;
                 }
+                // Fallback for prefabs (like the Fuel Container) that don't deactivate or set NetworkunitState on death -
+                // an exploded/destroyed unit still visually loses all its renderers even if the GameObject lingers.
+                else if (Time.unscaledTime - queued.previewSpawnedAt >= PreviewDestructionGraceSeconds
+                    && !HasVisibleRenderer(queued.previewFuelContainer))
+                {
+                    fuelContainerDestroyedInCombat = true;
+                }
                 // Skip the inactive check briefly after (re)spawning - newly spawned units can take a frame or two to activate.
                 // Only activeInHierarchy is checked (not `disabled`, which can be legitimately true for an unpowered preview).
                 else if (Time.unscaledTime - queued.previewSpawnedAt >= PreviewDestructionGraceSeconds
@@ -1224,7 +1231,8 @@ internal sealed class BuilderBuildingPlacementService
             Unit fuelContainer = queued.previewFuelContainer;
             bool destroyedInCombat = fuelContainer == null
                 || fuelContainer.gameObject == null
-                || fuelContainer.NetworkunitState == Unit.UnitState.Destroyed;
+                || fuelContainer.NetworkunitState == Unit.UnitState.Destroyed
+                || (Time.unscaledTime - queued.previewSpawnedAt >= PreviewDestructionGraceSeconds && !HasVisibleRenderer(fuelContainer));
             bool deleted = !destroyedInCombat
                 && Time.unscaledTime - queued.previewSpawnedAt >= PreviewDestructionGraceSeconds
                 && !fuelContainer!.gameObject!.activeInHierarchy;
@@ -1319,6 +1327,22 @@ internal sealed class BuilderBuildingPlacementService
     {
         FactionHQ? hq = BuilderGameAccess.GetLocalHq();
         hq?.AddFunds(queued.cost);
+    }
+
+    // Some preview prefabs (e.g. the Fuel Container) never set NetworkunitState/deactivate on death, so a fully
+    // rendererless unit is treated as destroyed too
+    private static bool HasVisibleRenderer(Unit unit)
+    {
+        Renderer[] renderers = unit.GetComponentsInChildren<Renderer>();
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            if (renderers[i].enabled)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void RefundPendingPlacements()
@@ -1508,6 +1532,7 @@ internal sealed class BuilderBuildingPlacementService
                 rotation,
                 hq,
                 $"PREVIEW_{Time.frameCount}");
+            DisablePreviewPhysics(previewFuelContainer);
         }
         catch (Exception exception)
         {
@@ -1533,17 +1558,35 @@ internal sealed class BuilderBuildingPlacementService
             }
 
             Vector3 localPosition = queued.target.ToLocalPosition() + previewDefinition.spawnOffset + queued.definition.SpawnOffset;
-            return spawner.SpawnFromUnitDefinitionInEditor(
+            Unit? spawnedPreview = spawner.SpawnFromUnitDefinitionInEditor(
                 previewDefinition,
                 localPosition.ToGlobalPosition(),
                 queued.rotation,
                 hq,
                 $"PREVIEW_{Time.frameCount}");
+            DisablePreviewPhysics(spawnedPreview);
+            return spawnedPreview;
         }
         catch (Exception exception)
         {
             BuilderPlugin.Log.LogWarning($"Failed to spawn queued placement preview: {exception.Message}");
             return null;
+        }
+    }
+
+    // Previews are just placeholders, not part of the physics/damage simulation - keep explosions/collisions from knocking them around
+    private static void DisablePreviewPhysics(Unit? preview)
+    {
+        if (preview == null)
+        {
+            return;
+        }
+
+        Rigidbody[] rigidbodies = preview.GetComponentsInChildren<Rigidbody>(includeInactive: true);
+        for (int i = 0; i < rigidbodies.Length; i++)
+        {
+            // isKinematic alone stops it moving/falling over; leave detectCollisions alone so hit detection (and damage) still works
+            rigidbodies[i].isKinematic = true;
         }
     }
 
