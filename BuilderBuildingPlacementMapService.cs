@@ -12,6 +12,11 @@ internal sealed class BuilderBuildingPlacementMapService
     private const float HeaderHeight = 30f;
 
     private static readonly MethodInfo? JumpCameraToMethod = AccessTools.Method(typeof(DynamicMap), "JumpCameraTo");
+    private static readonly MethodInfo? ShowSelectAirbaseMethod = typeof(GameplayUI).GetMethod("ShowSelectAirbase");
+    private static readonly MethodInfo? ShowSpectatorPanelMethod = typeof(GameplayUI).GetMethod("ShowSpectatorPanel");
+    private static readonly Type? CommanderPluginType = Type.GetType("NuclearOptionCommander.CommanderPlugin, NuclearOptionCommander");
+    private static readonly PropertyInfo? CommanderInstanceProperty = CommanderPluginType?.GetProperty("Instance", BindingFlags.Public | BindingFlags.Static);
+    private static readonly PropertyInfo? CommanderIsActiveProperty = CommanderPluginType?.GetProperty("IsCommanderModeActive", BindingFlags.Public | BindingFlags.Instance);
 
     internal static BuilderBuildingPlacementMapService? Instance { get; private set; }
 
@@ -251,11 +256,8 @@ internal sealed class BuilderBuildingPlacementMapService
         {
             try
             {
-                // Try to restore panels if methods exist
-                var showSelectAirbaseMethod = gameplayUi.GetType().GetMethod("ShowSelectAirbase");
-                var showSpectatorPanelMethod = gameplayUi.GetType().GetMethod("ShowSpectatorPanel");
-                showSelectAirbaseMethod?.Invoke(gameplayUi, null);
-                showSpectatorPanelMethod?.Invoke(gameplayUi, null);
+                ShowSelectAirbaseMethod?.Invoke(gameplayUi, null);
+                ShowSpectatorPanelMethod?.Invoke(gameplayUi, null);
             }
             catch
             {
@@ -264,23 +266,19 @@ internal sealed class BuilderBuildingPlacementMapService
         }
     }
 
-    private bool IsNoCommanderActive()
+    private static bool IsNoCommanderActive()
     {
+        if (CommanderInstanceProperty == null || CommanderIsActiveProperty == null)
+        {
+            return false;
+        }
+
         try
         {
-            var commanderPluginType = Type.GetType("NuclearOptionCommander.CommanderPlugin, NuclearOptionCommander");
-            if (commanderPluginType == null) return false;
-
-            var instanceProp = commanderPluginType.GetProperty("Instance", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-            if (instanceProp == null) return false;
-
-            var instance = instanceProp.GetValue(null);
+            object? instance = CommanderInstanceProperty.GetValue(null);
             if (instance == null) return false;
 
-            var isCommanderActiveProp = commanderPluginType.GetProperty("IsCommanderModeActive", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-            if (isCommanderActiveProp == null) return false;
-
-            return (bool?)isCommanderActiveProp.GetValue(instance) ?? false;
+            return (bool?)CommanderIsActiveProperty.GetValue(instance) ?? false;
         }
         catch
         {

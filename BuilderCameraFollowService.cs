@@ -1,15 +1,9 @@
-using UnityEngine;
-
 namespace NuclearOptionBuilder;
 
 internal sealed class BuilderCameraFollowService
 {
-    private const float CameraHeight = 20f;
-    private const float CameraPovDistance = 15f;
-    
     private bool followEnabled;
     private bool povMode;
-    private Vector3 lastCameraPos = Vector3.zero;
 
     internal bool Enabled => followEnabled;
     internal bool PovMode => povMode;
@@ -41,12 +35,7 @@ internal sealed class BuilderCameraFollowService
 
     internal void Tick()
     {
-        // Track camera state for UI display purposes
-        Camera? camera = Camera.main;
-        if (camera != null)
-        {
-            lastCameraPos = camera.transform.position;
-        }
+        // Reserved for future camera-follow behavior; nothing to update yet
     }
 }
 

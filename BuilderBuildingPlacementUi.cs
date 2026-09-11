@@ -163,6 +163,25 @@ internal BuilderBuildingPlacementUi(BuilderBuildingPlacementService service, Act
             BuilderUiTheme.Label);
         y += 32f;
 
+        // Selected unit hold position control (ground vehicles and ships only)
+        if (service.TryGetSelectedCommandableUnit(out Unit? selectedUnit, out bool holdPosition) && selectedUnit != null)
+        {
+            GUI.Label(
+                new Rect(12f, y, windowRect.width - 24f, 22f),
+                $"SELECTED UNIT  {selectedUnit.unitName}",
+                BuilderUiTheme.Label);
+            y += 26f;
+
+            if (GUI.Button(
+                new Rect(12f, y, windowRect.width - 24f, 30f),
+                holdPosition ? "RESUME MOVEMENT" : "HOLD POSITION",
+                holdPosition ? BuilderUiTheme.SelectedButton : BuilderUiTheme.PrimaryButton))
+            {
+                service.ToggleSelectedUnitHoldPosition();
+            }
+            y += 38f;
+        }
+
         Rect listRect = new(12f, y, windowRect.width - 24f, windowRect.height - y - 150f);
         GUI.Box(listRect, string.Empty, BuilderUiTheme.Panel);
         BuilderUiTheme.DrawSubtleBorder(listRect, 1f);
@@ -208,7 +227,7 @@ internal BuilderBuildingPlacementUi(BuilderBuildingPlacementService service, Act
             // Draw item only if category is expanded
             if (service.IsCategoryExpanded(definition.Category))
             {
-                bool canAfford = service.CanAffordDefinition(definition);
+                bool canAfford = service.CanAffordDefinition(definition, hq);
                 GUIStyle style = ReferenceEquals(definition, selected)
                     ? BuilderUiTheme.SelectedButton
                     : BuilderUiTheme.Button;

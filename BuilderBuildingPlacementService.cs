@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using NuclearOption.Networking;
 using UnityEngine;
 
@@ -34,9 +35,15 @@ internal sealed class BuilderBuildingPlacementService
     private const float VehicleDepotSearchTimeoutSeconds = 5f;  // Vehicle placements timeout after 5 seconds if no depot found
     private const float PreviewDestructionGraceSeconds = 1.5f;  // Ignore destruction checks briefly after (re)spawning a preview, since newly spawned units can start disabled for a frame or two
 
+    // No public API clears these once a player-attributed order sets them; without resetting them the AI's own
+    // objective/nearest-enemy loop stays gated off forever after a single hold order.
+    private static readonly FieldInfo? GroundVehicleCommandedDestinationField = typeof(GroundVehicle).GetField("commandedDestination", BindingFlags.NonPublic | BindingFlags.Instance);
+    private static readonly FieldInfo? GroundVehicleDestinationField = typeof(GroundVehicle).GetField("destination", BindingFlags.NonPublic | BindingFlags.Instance);
+
     private readonly BuilderMapClickTracker placementClickTracker = new();
     private readonly BuilderPlacementCursorState placementCursorState = new();
     private readonly List<PlaceableDefinition> placeableDefinitions = new();
+    private readonly List<PlaceableDefinition> visibleDefinitionsCache = new();
     private readonly List<QueuedPlacement> pendingPlacements = new();
     private readonly Dictionary<BuildCategory, bool> categoryExpandedState = new()
     {
@@ -77,26 +84,17 @@ internal sealed class BuilderBuildingPlacementService
     private float nextRefreshAt;
     private string statusText = string.Empty;
     private float buildTimeMultiplier = 1f;
+    private UnitDefinition? fuelContainerDefinition;
+    private bool fuelContainerMissingWarningShown;
     private BuildingDefinition? ammoDumpDefinition;
     private bool ammoDumpMissingWarningShown;
-    private Unit? previewAmmoDump;
+    private Unit? previewFuelContainer;
 
     internal bool AwaitingPlacementSelection => awaitingPlacementSelection;
 
     internal IReadOnlyList<PlaceableDefinition> PlaceableDefinitions => placeableDefinitions;
 
-    internal IReadOnlyList<PlaceableDefinition> VisibleDefinitions
-    {
-        get
-        {
-            // Group by category, sort within each group, flatten results
-            return placeableDefinitions
-                .GroupBy(d => d.Category)
-                .OrderBy(g => g.Key)
-                .SelectMany(g => g.OrderBy(d => d.UnitName, StringComparer.OrdinalIgnoreCase))
-                .ToList();
-        }
-    }
+    internal IReadOnlyList<PlaceableDefinition> VisibleDefinitions => visibleDefinitionsCache;
 
     internal PlaceableDefinition? SelectedDefinition => placeableDefinitions.Count == 0
         ? null
@@ -250,7 +248,7 @@ internal sealed class BuilderBuildingPlacementService
 
     internal void ResetSession()
     {
-        DestroyPreviewAmmoDump();
+        DestroyPreviewFuelContainer();
         RefundPendingPlacements();
         awaitingPlacementSelection = false;
         awaitingOrientationConfirmation = false;
@@ -259,6 +257,7 @@ internal sealed class BuilderBuildingPlacementService
         placementClickTracker.Reset();
         placementCursorState.Deactivate();
         placeableDefinitions.Clear();
+        visibleDefinitionsCache.Clear();
         selectedIndex = 0;
         nextRefreshAt = 0f;
         statusText = string.Empty;
@@ -288,7 +287,7 @@ internal sealed class BuilderBuildingPlacementService
             {
                 float signedScrollDelta = BuilderSettings.PlacementReverseScrollDirection ? -scrollDelta : scrollDelta;
                 pendingYawDegrees = NormalizeYawDegrees(pendingYawDegrees + signedScrollDelta * OrientationStepDegrees);
-                UpdatePreviewAmmoDumpRotation();
+                UpdatePreviewFuelContainerRotation();
             }
 
             if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
@@ -332,8 +331,103 @@ internal sealed class BuilderBuildingPlacementService
 
     internal bool CanAffordDefinition(PlaceableDefinition definition)
     {
-        FactionHQ? hq = BuilderGameAccess.GetLocalHq();
+        return CanAffordDefinition(definition, BuilderGameAccess.GetLocalHq());
+    }
+
+    internal bool CanAffordDefinition(PlaceableDefinition definition, FactionHQ? hq)
+    {
         return hq == null || hq.factionFunds >= definition.Value;
+    }
+
+    // First selected ground vehicle or ship on the tactical map, since only those two support hold position
+    internal bool TryGetSelectedCommandableUnit(out Unit? unit, out bool holdPosition)
+    {
+        unit = null;
+        holdPosition = false;
+
+        DynamicMap? map = SceneSingleton<DynamicMap>.i;
+        if (map == null)
+        {
+            return false;
+        }
+
+        foreach (MapIcon icon in map.selectedIcons)
+        {
+            if (icon is not UnitMapIcon { unit: { } candidate })
+            {
+                continue;
+            }
+
+            if (candidate is GroundVehicle groundVehicle)
+            {
+                unit = groundVehicle;
+                holdPosition = groundVehicle.GetHoldPosition();
+                return true;
+            }
+
+            if (candidate is Ship ship)
+            {
+                unit = ship;
+                holdPosition = ship.holdPosition;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    internal void ToggleSelectedUnitHoldPosition()
+    {
+        if (!TryGetSelectedCommandableUnit(out Unit? unit, out bool holdPosition))
+        {
+            return;
+        }
+
+        bool willHold = !holdPosition;
+
+        if (unit is GroundVehicle groundVehicle)
+        {
+            groundVehicle.SetHoldPosition(willHold);
+
+            if (willHold)
+            {
+                // Attribute a stay-in-place order to the player so the map's Order tooltip shows Player Control
+                if (unit is ICommandable { UnitCommand: { } holdCommand })
+                {
+                    holdCommand.SetDestination(unit.GlobalPosition(), playerCommand: true);
+                }
+            }
+            else
+            {
+                // Don't call SetDestination ourselves here - it always re-pins "destination" to whatever position
+                // is passed in and re-paths to it, which would undo this reset in the same call by targeting this
+                // exact spot again. Just open the gate and let the AI's own loop issue its own next destination.
+                GroundVehicleCommandedDestinationField?.SetValue(groundVehicle, false);
+                GroundVehicleDestinationField?.SetValue(groundVehicle, default(GlobalPosition));
+            }
+        }
+        else if (unit is Ship ship)
+        {
+            ship.SetHoldPosition(willHold);
+
+            if (unit is ICommandable { UnitCommand: { } shipCommand })
+            {
+                if (willHold)
+                {
+                    // Attribute a stay-in-place order to the player so the map's Order tooltip shows Player Control
+                    shipCommand.SetDestination(unit.GlobalPosition(), playerCommand: true);
+                }
+                else
+                {
+                    // Ships have no autonomous objective-seeking of their own (unlike GroundVehicle) - pick the
+                    // nearest active faction objective ourselves, same source the vehicle AI itself relies on
+                    GlobalPosition resumeDestination = MissionPosition.TryGetClosestPosition(ship, out GlobalPosition closestObjective)
+                        ? closestObjective
+                        : unit.GlobalPosition();
+                    shipCommand.SetDestination(resumeDestination, playerCommand: false);
+                }
+            }
+        }
     }
 
     internal void AdjustBuildTimeMultiplier(bool increase)
@@ -455,7 +549,7 @@ internal sealed class BuilderBuildingPlacementService
             return;
         }
 
-        DestroyPreviewAmmoDump();
+        DestroyPreviewFuelContainer();
         awaitingPlacementSelection = false;
         awaitingOrientationConfirmation = false;
         pendingPlacementTarget = default;
@@ -523,6 +617,13 @@ internal sealed class BuilderBuildingPlacementService
             return categoryCompare != 0 ? categoryCompare : string.Compare(left.UnitName, right.UnitName, StringComparison.OrdinalIgnoreCase);
         });
 
+        // Rebuild the cached grouped/sorted view once here, instead of on every VisibleDefinitions access
+        visibleDefinitionsCache.Clear();
+        visibleDefinitionsCache.AddRange(placeableDefinitions
+            .GroupBy(d => d.Category)
+            .OrderBy(g => g.Key)
+            .SelectMany(g => g.OrderBy(d => d.UnitName, StringComparer.OrdinalIgnoreCase)));
+
         if (placeableDefinitions.Count == 0)
         {
             selectedIndex = 0;
@@ -533,7 +634,32 @@ internal sealed class BuilderBuildingPlacementService
             return;
         }
 
-        // Cache ammo dump definition, used as the placement preview
+        // Cache fuel container definition, used as the placement preview.
+        // The 10,000L variant is jsonKey "FuelContainer3" (jsonKeys are just sequential, not capacity-based),
+        // in Encyclopedia.otherUnits ("Other Units" category in-game) - matched here on its unitName instead.
+        if (fuelContainerDefinition == null && encyclopedia?.otherUnits != null)
+        {
+            fuelContainerDefinition = encyclopedia.otherUnits.FirstOrDefault(d =>
+                d != null && d.unitPrefab != null && d.unitName != null &&
+                d.unitName.IndexOf("Fuel Container", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                (d.unitName.IndexOf("10,000", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 d.unitName.IndexOf("10000", StringComparison.OrdinalIgnoreCase) >= 0));
+        }
+
+        if (fuelContainerDefinition == null)
+        {
+            if (!fuelContainerMissingWarningShown)
+            {
+                fuelContainerMissingWarningShown = true;
+                SetStatus("No fuel container blueprint found; placement previews will be unavailable.", warning: true);
+            }
+        }
+        else
+        {
+            fuelContainerMissingWarningShown = false;
+        }
+
+        // Cache ammo dump definition, used as the placement preview for ships
         if (ammoDumpDefinition == null)
         {
             ammoDumpDefinition = buildings.FirstOrDefault(d =>
@@ -546,7 +672,7 @@ internal sealed class BuilderBuildingPlacementService
             if (!ammoDumpMissingWarningShown)
             {
                 ammoDumpMissingWarningShown = true;
-                SetStatus("No ammo dump blueprint found; placement previews will be unavailable.", warning: true);
+                SetStatus("No ammo dump blueprint found; ship placement previews will be unavailable.", warning: true);
             }
         }
         else
@@ -575,21 +701,19 @@ internal sealed class BuilderBuildingPlacementService
         // Ships should not be snapped to terrain - use their position as-is with default offset
         pendingPlacementTarget = SelectedDefinition?.IsShip == true ? target : SnapConstructionTargetToTerrain(target);
         pendingYawDegrees = 0f;
-        // Preview structure is only shown for buildings, not ships/vehicles
-        if (IsStructureDefinition(SelectedDefinition))
-        {
-            SpawnPreviewAmmoDump(pendingPlacementTarget, BuildPlacementRotation(pendingYawDegrees));
-        }
-        else
-        {
-            DestroyPreviewAmmoDump();
-        }
+        // SpawnPreviewFuelContainer clears any existing preview and no-ops if there's no preview definition for the selected type
+        SpawnPreviewFuelContainer(pendingPlacementTarget, BuildPlacementRotation(pendingYawDegrees));
         SetStatus("Scroll mouse wheel to rotate. Press Enter to confirm placement.");
     }
 
-    private static bool IsStructureDefinition(PlaceableDefinition? definition)
+    // Structures preview as a fuel container; ships preview as an ammo dump; vehicles get no preview
+    private UnitDefinition? GetPreviewDefinition(PlaceableDefinition? definition)
     {
-        return definition != null && !definition.IsShip && !definition.IsVehicle;
+        if (definition == null || definition.IsVehicle)
+        {
+            return null;
+        }
+        return definition.IsShip ? ammoDumpDefinition : fuelContainerDefinition;
     }
 
     private void CompletePlacementSelection(GlobalPosition target, float yawDegrees)
@@ -598,7 +722,7 @@ internal sealed class BuilderBuildingPlacementService
         FactionHQ? hq = BuilderGameAccess.GetLocalHq();
         if (definition == null || hq == null)
         {
-            DestroyPreviewAmmoDump();
+            DestroyPreviewFuelContainer();
             CancelPlacementSelection(showStatus: false);
             SetStatus("The building could not be spawned.", warning: true);
             return;
@@ -638,9 +762,9 @@ internal sealed class BuilderBuildingPlacementService
             rotation);
         
         // Transfer preview ownership so it stays visible through the waiting-for-activation period, not just after
-        placement.previewAmmoDump = previewAmmoDump;
+        placement.previewFuelContainer = previewFuelContainer;
         placement.previewSpawnedAt = Time.unscaledTime;
-        previewAmmoDump = null;
+        previewFuelContainer = null;
         
         pendingPlacements.Add(placement);
 
@@ -740,29 +864,29 @@ internal sealed class BuilderBuildingPlacementService
             }
             
             // Combat destruction sets NetworkunitState.Destroyed; manual deletion just deactivates/disables the object without that state
-            bool ammoDumpDeleted = false;
-            bool ammoDumpDestroyedInCombat = false;
-            if (queued.previewAmmoDump != null)
+            bool fuelContainerDeleted = false;
+            bool fuelContainerDestroyedInCombat = false;
+            if (queued.previewFuelContainer != null)
             {
                 // Re-check == null here: Unity's fake-null can flip between the outer check and this line once Destroy() has been called
-                if (queued.previewAmmoDump == null || queued.previewAmmoDump.gameObject == null)
+                if (queued.previewFuelContainer == null || queued.previewFuelContainer.gameObject == null)
                 {
-                    ammoDumpDestroyedInCombat = true;
+                    fuelContainerDestroyedInCombat = true;
                 }
-                else if (queued.previewAmmoDump.NetworkunitState == Unit.UnitState.Destroyed)
+                else if (queued.previewFuelContainer.NetworkunitState == Unit.UnitState.Destroyed)
                 {
-                    ammoDumpDestroyedInCombat = true;
+                    fuelContainerDestroyedInCombat = true;
                 }
                 // Skip the inactive check briefly after (re)spawning - newly spawned units can take a frame or two to activate.
                 // Only activeInHierarchy is checked (not `disabled`, which can be legitimately true for an unpowered preview).
                 else if (Time.unscaledTime - queued.previewSpawnedAt >= PreviewDestructionGraceSeconds
-                    && !queued.previewAmmoDump.gameObject.activeInHierarchy)
+                    && !queued.previewFuelContainer.gameObject.activeInHierarchy)
                 {
-                    ammoDumpDeleted = true;
+                    fuelContainerDeleted = true;
                 }
             }
             
-            if (ammoDumpDestroyedInCombat)
+            if (fuelContainerDestroyedInCombat)
             {
                 DestroyQueuedPlacementPreview(queued);
                 pendingPlacements.RemoveAt(i);
@@ -770,7 +894,7 @@ internal sealed class BuilderBuildingPlacementService
                 continue;
             }
             
-            if (ammoDumpDeleted)
+            if (fuelContainerDeleted)
             {
                 DestroyQueuedPlacementPreview(queued);
                 RefundQueuedPlacement(queued);
@@ -797,7 +921,7 @@ internal sealed class BuilderBuildingPlacementService
 
             // Remove preview 5 seconds before build completes to avoid spawn conflicts
             float timeRemaining = queued.buildDelaySeconds - queued.elapsedBuildSeconds;
-            if (queued.timerStarted && timeRemaining <= 5f && queued.previewAmmoDump != null)
+            if (queued.timerStarted && timeRemaining <= 5f && queued.previewFuelContainer != null)
             {
                 DestroyQueuedPlacementPreview(queued);
             }
@@ -862,9 +986,9 @@ internal sealed class BuilderBuildingPlacementService
         queued.startedAt = Time.unscaledTime;
         queued.elapsedBuildSeconds = 0f;
         // Fallback only: the preview normally already exists (transferred from selection in CompletePlacementSelection)
-        if (queued.previewAmmoDump == null && IsStructureDefinition(queued.definition))
+        if (queued.previewFuelContainer == null && GetPreviewDefinition(queued.definition) != null)
         {
-            queued.previewAmmoDump = SpawnQueuedPlacementPreviewAmmoDump(queued);
+            queued.previewFuelContainer = SpawnQueuedPlacementPreviewFuelContainer(queued);
             queued.previewSpawnedAt = Time.unscaledTime;
         }
         return true;
@@ -1094,16 +1218,16 @@ internal sealed class BuilderBuildingPlacementService
             return;
         }
 
-        // Check if preview ammo dump was removed before spawning - only refund for manual deletion, not combat destruction
-        if (queued.previewAmmoDump != null)
+        // Check if preview fuel container was removed before spawning - only refund for manual deletion, not combat destruction
+        if (queued.previewFuelContainer != null)
         {
-            Unit ammoDump = queued.previewAmmoDump;
-            bool destroyedInCombat = ammoDump == null
-                || ammoDump.gameObject == null
-                || ammoDump.NetworkunitState == Unit.UnitState.Destroyed;
+            Unit fuelContainer = queued.previewFuelContainer;
+            bool destroyedInCombat = fuelContainer == null
+                || fuelContainer.gameObject == null
+                || fuelContainer.NetworkunitState == Unit.UnitState.Destroyed;
             bool deleted = !destroyedInCombat
                 && Time.unscaledTime - queued.previewSpawnedAt >= PreviewDestructionGraceSeconds
-                && !ammoDump!.gameObject!.activeInHierarchy;
+                && !fuelContainer!.gameObject!.activeInHierarchy;
 
             if (destroyedInCombat)
             {
@@ -1210,11 +1334,11 @@ internal sealed class BuilderBuildingPlacementService
 
     private void DestroyQueuedPlacementPreview(QueuedPlacement queued)
     {
-        if (queued?.previewAmmoDump != null)
+        if (queued?.previewFuelContainer != null)
         {
             try
             {
-                UnityEngine.Object.Destroy(queued.previewAmmoDump.gameObject);
+                UnityEngine.Object.Destroy(queued.previewFuelContainer.gameObject);
             }
             catch (Exception exception)
             {
@@ -1222,7 +1346,7 @@ internal sealed class BuilderBuildingPlacementService
             }
             finally
             {
-                queued.previewAmmoDump = null;
+                queued.previewFuelContainer = null;
             }
         }
     }
@@ -1357,13 +1481,14 @@ internal sealed class BuilderBuildingPlacementService
         return Mathf.Clamp(steppedScaledMinutes, FinalMinimumBuildDelayMinutes, maxDelay);
     }
 
-    private void SpawnPreviewAmmoDump(GlobalPosition target, Quaternion rotation)
+    private void SpawnPreviewFuelContainer(GlobalPosition target, Quaternion rotation)
     {
         try
         {
-            DestroyPreviewAmmoDump();
-            
-            if (ammoDumpDefinition == null)
+            DestroyPreviewFuelContainer();
+
+            UnitDefinition? previewDefinition = GetPreviewDefinition(SelectedDefinition);
+            if (previewDefinition == null)
             {
                 return;
             }
@@ -1376,25 +1501,26 @@ internal sealed class BuilderBuildingPlacementService
             }
 
             Vector3 selectedUnitOffset = SelectedDefinition?.SpawnOffset ?? Vector3.zero;
-            Vector3 localPosition = target.ToLocalPosition() + ammoDumpDefinition.spawnOffset + selectedUnitOffset;
-            previewAmmoDump = spawner.SpawnFromUnitDefinitionInEditor(
-                ammoDumpDefinition,
+            Vector3 localPosition = target.ToLocalPosition() + previewDefinition.spawnOffset + selectedUnitOffset;
+            previewFuelContainer = spawner.SpawnFromUnitDefinitionInEditor(
+                previewDefinition,
                 localPosition.ToGlobalPosition(),
                 rotation,
                 hq,
-                $"PREVIEW_AMMODUMP_{Time.frameCount}");
+                $"PREVIEW_{Time.frameCount}");
         }
         catch (Exception exception)
         {
-            BuilderPlugin.Log.LogWarning($"Failed to spawn preview ammo dump: {exception.Message}");
+            BuilderPlugin.Log.LogWarning($"Failed to spawn placement preview: {exception.Message}");
         }
     }
 
-    private Unit? SpawnQueuedPlacementPreviewAmmoDump(QueuedPlacement queued)
+    private Unit? SpawnQueuedPlacementPreviewFuelContainer(QueuedPlacement queued)
     {
         try
         {
-            if (ammoDumpDefinition == null)
+            UnitDefinition? previewDefinition = GetPreviewDefinition(queued.definition);
+            if (previewDefinition == null)
             {
                 return null;
             }
@@ -1406,51 +1532,51 @@ internal sealed class BuilderBuildingPlacementService
                 return null;
             }
 
-            Vector3 localPosition = queued.target.ToLocalPosition() + ammoDumpDefinition.spawnOffset + queued.definition.SpawnOffset;
+            Vector3 localPosition = queued.target.ToLocalPosition() + previewDefinition.spawnOffset + queued.definition.SpawnOffset;
             return spawner.SpawnFromUnitDefinitionInEditor(
-                ammoDumpDefinition,
+                previewDefinition,
                 localPosition.ToGlobalPosition(),
                 queued.rotation,
                 hq,
-                $"PREVIEW_AMMODUMP_{Time.frameCount}");
+                $"PREVIEW_{Time.frameCount}");
         }
         catch (Exception exception)
         {
-            BuilderPlugin.Log.LogWarning($"Failed to spawn queued placement preview ammo dump: {exception.Message}");
+            BuilderPlugin.Log.LogWarning($"Failed to spawn queued placement preview: {exception.Message}");
             return null;
         }
     }
 
-    private void DestroyPreviewAmmoDump()
+    private void DestroyPreviewFuelContainer()
     {
-        if (previewAmmoDump != null)
+        if (previewFuelContainer != null)
         {
             try
             {
-                UnityEngine.Object.Destroy(previewAmmoDump.gameObject);
+                UnityEngine.Object.Destroy(previewFuelContainer.gameObject);
             }
             catch (Exception exception)
             {
-                BuilderPlugin.Log.LogWarning($"Failed to destroy preview ammo dump: {exception.Message}");
+                BuilderPlugin.Log.LogWarning($"Failed to destroy preview fuel container: {exception.Message}");
             }
             finally
             {
-                previewAmmoDump = null;
+                previewFuelContainer = null;
             }
         }
     }
 
-    private void UpdatePreviewAmmoDumpRotation()
+    private void UpdatePreviewFuelContainerRotation()
     {
-        if (previewAmmoDump != null)
+        if (previewFuelContainer != null)
         {
             try
             {
-                previewAmmoDump.transform.rotation = BuildPlacementRotation(pendingYawDegrees);
+                previewFuelContainer.transform.rotation = BuildPlacementRotation(pendingYawDegrees);
             }
             catch (Exception exception)
             {
-                BuilderPlugin.Log.LogWarning($"Failed to update preview ammo dump rotation: {exception.Message}");
+                BuilderPlugin.Log.LogWarning($"Failed to update preview fuel container rotation: {exception.Message}");
             }
         }
     }
@@ -1468,7 +1594,7 @@ internal sealed class BuilderBuildingPlacementService
         internal float completeAt;
         internal float createdAt;
         internal float elapsedBuildSeconds;
-        internal Unit? previewAmmoDump;
+        internal Unit? previewFuelContainer;
         internal float previewSpawnedAt;
 
         internal QueuedPlacement(
